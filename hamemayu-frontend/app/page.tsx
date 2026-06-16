@@ -35,33 +35,32 @@ export default async function Home() {
 
       <Header />
 
-      <section className="relative min-h-screen flex items-center justify-center border-b-4 border-slate-900 dark:border-yellow-400 z-10">
-        <div className="absolute inset-0 z-0 bg-green-50 dark:bg-slate-900 transition-colors duration-500">
+      <section className="relative min-h-screen flex items-center justify-center border-b border-white/30 dark:border-slate-800/60 z-10 pt-20">
+        <div className="absolute inset-0 z-0 bg-slate-100 dark:bg-slate-900 overflow-hidden">
           <Image 
             src={heroBg} 
             alt="Hero Background" 
             fill
-            className="object-cover opacity-90 dark:opacity-60 transition-all duration-1000" 
+            className="object-cover opacity-100 dark:opacity-60 transition-transform duration-[20s] ease-out scale-110 hover:scale-100" 
             unoptimized 
             priority
           />
+          {/* Gradient dipercerah untuk Light Mode */}
+          <div className="absolute inset-0 bg-linear-to-b from-white/30 via-white/10 to-slate-50 dark:from-brutal-dark/90 dark:via-brutal-dark/60 dark:to-brutal-dark backdrop-blur-[2px] transition-colors duration-500" />
         </div>
-        
-        <div className="absolute inset-0 z-0 bg-linear-to-r from-green-100/90 via-green-50/50 to-transparent dark:from-slate-900/95 dark:via-slate-900/70 dark:to-transparent transition-colors duration-500" />
-        <div className="absolute inset-0 z-0 bg-linear-to-t from-white/80 dark:from-slate-900 via-transparent to-transparent backdrop-blur-[2px] transition-colors duration-500" />
 
-        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center flex flex-col items-center mt-32">
+        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center flex flex-col items-center mt-10">
           
-          <div className="font-mono bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-green-800 dark:text-yellow-400 px-5 py-2 font-bold tracking-[0.3em] uppercase text-xs md:text-sm mb-8 flex items-center gap-4 border-2 border-slate-900 dark:border-yellow-400 shadow-[4px_4px_0_0_rgba(15,28,53,1)] dark:shadow-[4px_4px_0_0_rgba(250,204,21,1)] rounded-full">
+          <div className="font-mono bg-white/60 dark:bg-slate-800/40 backdrop-blur-2xl text-green-900 dark:text-yellow-400 px-6 py-2.5 font-bold tracking-[0.2em] uppercase text-xs border border-white/60 dark:border-slate-700/50 shadow-sm rounded-full mb-8 transform hover:scale-105 transition-all duration-300">
             Nusantara Digital City
           </div>
 
-          <h1 className="text-6xl md:text-7xl lg:text-8xl text-slate-900 dark:text-white font-serif leading-tight mb-8 drop-shadow-[3px_3px_0_rgba(15,28,53,1)] dark:drop-shadow-[3px_3px_0_rgba(250,204,21,0.5)] transition-colors duration-500 uppercase tracking-tighter">
+          <h1 className="text-5xl md:text-7xl lg:text-8xl text-slate-900 dark:text-white font-serif font-bold leading-tight mb-8 drop-shadow-sm transition-colors duration-500 tracking-tight max-w-4xl">
             {settings?.hero_title || 'Jelajahi Jiwa Yogyakarta'}
           </h1>
 
-          <div className="bg-white/50 dark:bg-slate-900/60 backdrop-blur-xl border-2 border-slate-900 dark:border-yellow-400 shadow-[6px_6px_0_0_rgba(15,28,53,1)] dark:shadow-[6px_6px_0_0_rgba(250,204,21,1)] p-6 md:p-8 rounded-2xl mb-12 max-w-3xl">
-            <p className="text-lg md:text-xl text-slate-900 dark:text-slate-200 leading-relaxed font-sans font-medium transition-colors duration-500">
+          <div className="bg-white/60 dark:bg-brutal-dark/50 backdrop-blur-3xl border border-white/60 dark:border-slate-700/50 shadow-[0_16px_40px_-8px_rgba(15,28,53,0.15)] p-6 md:p-10 rounded-4xl mb-12 max-w-3xl transform hover:shadow-[0_24px_60px_-12px_rgba(15,28,53,0.2)] transition-all duration-500">
+            <p className="text-base md:text-lg text-slate-800 dark:text-slate-300 leading-relaxed font-sans font-medium transition-colors duration-500">
               {settings?.hero_subtitle || 'Padukan kecanggihan AI, peta interaktif, dan visualisasi memukau untuk mendalami warisan leluhur. Semua dalam genggaman.'}
             </p>
           </div>
@@ -69,7 +68,7 @@ export default async function Home() {
           <div className="flex flex-col sm:flex-row gap-5">
             <Link 
               href="/login" 
-              className="font-mono bg-yellow-400/90 dark:bg-yellow-500/90 backdrop-blur-sm border-2 border-slate-900 dark:border-yellow-400 shadow-[6px_6px_0_0_rgba(15,28,53,1)] dark:shadow-[6px_6px_0_0_rgba(250,204,21,1)] text-slate-900 px-10 py-4 text-base font-bold hover:-translate-y-1 hover:translate-x-1 hover:shadow-[8px_8px_0_0_rgba(15,28,53,1)] dark:hover:shadow-[8px_8px_0_0_rgba(250,204,21,1)] active:translate-y-0 active:translate-x-0 active:shadow-none transition-all flex items-center justify-center gap-3 rounded-xl"
+              className="font-mono bg-green-700 dark:bg-yellow-400 text-white dark:text-slate-900 px-12 py-4 text-sm font-bold shadow-[0_8px_24px_rgba(22,101,52,0.25)] dark:shadow-[0_8px_24px_rgba(250,204,21,0.25)] hover:bg-green-800 dark:hover:bg-yellow-500 hover:scale-105 active:scale-95 transition-all duration-300 rounded-full flex items-center justify-center gap-3"
             >
               MULAI EKSPLORASI
             </Link>

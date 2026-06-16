@@ -20,7 +20,6 @@ interface ApiListResponse {
   data?: ContentItem[];
 }
 
-// Pusat koordinat Tugu Jogja dipindah ke luar komponen agar tidak memicu re-render
 const DEFAULT_CENTER: [number, number] = [-7.7829, 110.3671];
 
 const MapComponent = dynamic(
@@ -28,9 +27,9 @@ const MapComponent = dynamic(
   { 
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-200 dark:bg-slate-800 border-4 border-slate-900 dark:border-white/20 brutal-shadow animate-pulse">
-        <div className="w-16 h-16 border-4 border-golden-heritage border-t-slate-900 rounded-full animate-spin mb-4"></div>
-        <p className="font-mono text-slate-500 font-bold uppercase">MENGAKTIFKAN RADAR SATELIT & RUTE...</p>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-white/50 dark:bg-brutal-dark/50 backdrop-blur-xl animate-pulse">
+        <div className="w-12 h-12 border-4 border-green-700/30 dark:border-yellow-400/30 border-t-green-700 dark:border-t-yellow-400 rounded-full animate-spin mb-4"></div>
+        <p className="font-mono text-[10px] text-slate-500 font-bold uppercase tracking-widest">Mengaktifkan Radar Satelit...</p>
       </div>
     )
   }
@@ -81,19 +80,19 @@ export default function PetaPage() {
   }, []);
 
   return (
-    <div className="animate-in fade-in duration-500 h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] flex flex-col">
+    <div className="animate-in fade-in duration-500 h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] flex flex-col max-w-7xl mx-auto w-full pb-6">
       <div className="mb-6 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tighter mb-2">
-            RADAR_INTERAKTIF
+          <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2 drop-shadow-sm">
+            Radar Interaktif
           </h1>
-          <p className="font-mono text-slate-600 dark:text-slate-400 text-sm">
-            NAVIGASI & PEMANTAUAN TITIK DESTINASI (OSRM POWERED)
+          <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
+            Navigasi & Pemantauan Titik Destinasi
           </p>
         </div>
       </div>
 
-      <div className="flex-1 relative border-4 border-slate-900 dark:border-white/20 brutal-shadow overflow-hidden bg-slate-200 dark:bg-slate-800 z-0">
+      <div className="flex-1 relative border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.06)] overflow-hidden bg-slate-100 dark:bg-slate-900 rounded-4xl z-0">
         {!loading && (
            <MapComponent 
              markers={markers} 

@@ -1,4 +1,4 @@
-import { Montserrat, Playfair_Display, Space_Mono } from 'next/font/google';
+import { Montserrat, Cormorant_Garamond, Space_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from './components/ThemeProvider';
 
@@ -7,7 +7,8 @@ const montserrat = Montserrat({
   variable: '--font-montserrat',
 });
 
-const playfair = Playfair_Display({
+const cormorant = Cormorant_Garamond({
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin'],
   variable: '--font-playfair',
 });
@@ -29,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className={`${montserrat.variable} ${playfair.variable} ${spaceMono.variable} scroll-smooth`} suppressHydrationWarning>
-      <body className="font-sans bg-slate-50 dark:bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-green-100/60 via-slate-50 to-yellow-100/40 dark:from-green-900/20 dark:via-slate-900 dark:to-slate-900 text-slate-900 dark:text-slate-100 antialiased selection:bg-yellow-400/80 selection:text-slate-900 min-h-screen">
+    <html lang="id" className={`${montserrat.variable} ${cormorant.variable} ${spaceMono.variable} scroll-smooth`} suppressHydrationWarning>
+      <body className="font-sans bg-slate-50 dark:bg-brutal-dark bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-green-100/60 via-slate-50 to-yellow-100/40 dark:from-green-900/20 dark:via-brutal-dark dark:to-brutal-dark text-slate-900 dark:text-slate-100 antialiased selection:bg-yellow-400/80 selection:text-slate-900 min-h-screen">
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
