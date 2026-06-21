@@ -1,0 +1,25 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://laravel.test:80/api/v1
+      - NEXT_PUBLIC_API_URL=http://localhost:80/api/v1
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:80
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+    networks:
+      - sail
+
+networks:
+  sail:
+    external:
+      name: hamemayu-backend_sail

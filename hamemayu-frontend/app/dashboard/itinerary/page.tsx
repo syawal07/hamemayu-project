@@ -296,13 +296,10 @@ export default function ItineraryPage() {
         </div>
       )}
 
-      {/* TAB: DETAIL ITINERARY */}
-      {activeTab === 'detail' && (
+            {/* TAB: DETAIL ITINERARY */}
+            {activeTab === 'detail' && (
         <div className="animate-in slide-in-from-right-4 duration-300">
-          <button 
-            onClick={() => setActiveTab('history')} 
-            className="flex items-center gap-2 font-mono text-[10px] font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all duration-300 mb-6 uppercase tracking-widest bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-md px-4 py-2 border border-white/60 dark:border-slate-700/50 rounded-full shadow-sm w-fit hover:-translate-x-1"
-          >
+          <button onClick={() => setActiveTab('history')} className="flex items-center gap-2 font-mono text-[10px] font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all duration-300 mb-6 uppercase tracking-widest bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-md px-4 py-2 border border-white/60 dark:border-slate-700/50 rounded-full shadow-sm w-fit hover:-translate-x-1">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             KEMBALI KE RIWAYAT
           </button>
@@ -318,28 +315,39 @@ export default function ItineraryPage() {
               <div className="p-8 md:p-12 border-b border-slate-200/60 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/30">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
                   <div>
-                    <span className="inline-block bg-slate-900/10 dark:bg-white/10 text-slate-800 dark:text-slate-200 px-4 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase mb-4 shadow-sm">
-                      DOKUMEN ID: #{selectedDetail.id}
-                    </span>
-                    <h2 className="font-serif text-4xl md:text-5xl font-bold text-slate-900 dark:text-white uppercase tracking-tight leading-tight">
-                      {selectedDetail.title}
-                    </h2>
+                    <span className="inline-block bg-slate-900/10 dark:bg-white/10 text-slate-800 dark:text-slate-200 px-4 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase mb-4 shadow-sm">DOKUMEN ID: #{selectedDetail.id}</span>
+                    <h2 className="font-serif text-4xl md:text-5xl font-bold text-slate-900 dark:text-white uppercase tracking-tight leading-tight">{selectedDetail.title}</h2>
                   </div>
+                  
+                  {/* TOMBOL NAVIGASI ITINERARY (ASYNC) */}
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
+                        const destinations = await extractItineraryCoords(selectedDetail);
+                        if (destinations.length === 0) {
+                          alert("Tidak ada destinasi dengan koordinat valid di itinerary ini.");
+                          return;
+                        }
+                        window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
+                      } catch (err) {
+                        console.error("Nav itinerary failed:", err);
+                        alert("Gagal memuat data peta.");
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 bg-green-700 dark:bg-yellow-400 text-white dark:text-slate-900 font-mono text-xs font-bold px-6 py-3 rounded-xl hover:bg-green-800 dark:hover:bg-yellow-500 transition-all shadow-sm active:scale-95 uppercase tracking-wide"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 3V4m0 0L9 7" />
+                    </svg>
+                    Navigasi Rute
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 font-mono border-t border-slate-200/60 dark:border-slate-700/50 pt-8">
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">DURASI</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{selectedDetail.days} HARI</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">PROFIL ANGGARAN</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white uppercase">{selectedDetail.budget_type || 'NORMAL'}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">ESTIMASI BIAYA</p>
-                    <p className="text-2xl font-bold text-green-700 dark:text-yellow-400">{selectedDetail.estimated_budget}</p>
-                  </div>
+                  <div><p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">DURASI</p><p className="text-2xl font-bold text-slate-900 dark:text-white">{selectedDetail.days} HARI</p></div>
+                  <div><p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">PROFIL ANGGARAN</p><p className="text-2xl font-bold text-slate-900 dark:text-white uppercase">{selectedDetail.budget_type || 'NORMAL'}</p></div>
+                  <div className="col-span-2"><p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5">ESTIMASI BIAYA</p><p className="text-2xl font-bold text-green-700 dark:text-yellow-400">{selectedDetail.estimated_budget}</p></div>
                 </div>
               </div>
 
@@ -352,21 +360,16 @@ export default function ItineraryPage() {
                 <div className="flex flex-col gap-10">
                   {selectedDetail.itinerary_data.days?.map((dayPlan, index) => (
                     <div key={index} className="relative pl-8 md:pl-12 border-l-2 border-dashed border-slate-200 dark:border-slate-700">
-                      
                       <div className="absolute top-0 -left-[21px] md:-left-[25px] w-10 h-10 md:w-12 md:h-12 bg-white dark:bg-slate-800 rounded-full border-4 border-green-100 dark:border-slate-700 flex items-center justify-center font-mono font-bold text-slate-900 dark:text-white shadow-sm">
                         <span className="text-green-700 dark:text-yellow-400">H{dayPlan.day}</span>
                       </div>
                       
                       <div className="mb-6 pt-1">
-                        <h4 className="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-                          {dayPlan.theme || `Eksplorasi Hari ${dayPlan.day}`}
-                        </h4>
+                        <h4 className="font-serif text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{dayPlan.theme || `Eksplorasi Hari ${dayPlan.day}`}</h4>
                         {dayPlan.transport_tip && (
                           <div className="inline-flex items-center gap-2 mt-3 bg-slate-100 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
                              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>
-                             <p className="font-mono text-[10px] text-slate-600 dark:text-slate-400 uppercase tracking-widest">
-                               TIPS TRANSPORT: {dayPlan.transport_tip}
-                             </p>
+                             <p className="font-mono text-[10px] text-slate-600 dark:text-slate-400 uppercase tracking-widest">TIPS TRANSPORT: {dayPlan.transport_tip}</p>
                           </div>
                         )}
                       </div>
@@ -374,12 +377,34 @@ export default function ItineraryPage() {
                       <div className="flex flex-col gap-4">
                         {dayPlan.slots?.map((slot, slotIndex) => (
                           <div key={slotIndex} className="bg-white/60 dark:bg-slate-800/40 backdrop-blur-sm border border-white/60 dark:border-slate-700/50 p-5 rounded-2xl flex flex-col md:flex-row md:items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="bg-slate-900/10 dark:bg-white/10 text-slate-800 dark:text-slate-200 px-4 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase w-fit text-center shrink-0">
-                              {slot.time_slot}
-                            </div>
-                            <p className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200 uppercase flex-1 leading-snug">
-                              {slot.title}
-                            </p>
+                            <div className="bg-slate-900/10 dark:bg-white/10 text-slate-800 dark:text-slate-200 px-4 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase w-fit text-center shrink-0">{slot.time_slot}</div>
+                            <p className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200 uppercase flex-1 leading-snug">{slot.title}</p>
+                            
+                            {/* TOMBOL PER-SLOT NAVIGASI */}
+                            {slot.content_id && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
+                                    // Simulasi itinerary object dengan 1 slot
+                                    const singleItinerary = { itinerary_data: { days: [{ slots: [slot] }] } };
+                                    const destinations = await extractItineraryCoords(singleItinerary);
+                                    if (destinations.length === 0) {
+                                      alert(`Koordinat untuk "${slot.title}" belum tersedia.`);
+                                      return;
+                                    }
+                                    window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
+                                  } catch (err) {
+                                    console.error("Nav slot failed:", err);
+                                    alert("Gagal membuka peta.");
+                                  }
+                                }}
+                                className="px-4 py-2 rounded-xl font-mono text-[10px] font-bold bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 transition-all uppercase flex items-center gap-2"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
+                                NAVIGASI
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>

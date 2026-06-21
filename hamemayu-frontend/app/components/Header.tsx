@@ -130,7 +130,12 @@ export default function Header() {
                   height={32} 
                   className="rounded-full border border-white/60 dark:border-slate-600/60 bg-slate-200 dark:bg-slate-800 object-cover aspect-square" 
                   unoptimized
-                />
+                  onError={(e) => {
+                    // Fallback ke ui-avatars kalau Google image gagal load (429/404)
+                    const target = e.target as HTMLImageElement;
+                    target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=FFD662&color=000&size=128`;
+                }}
+              />
               </button>
 
               {isDropdownOpen && (
@@ -196,14 +201,19 @@ export default function Header() {
 
             {user && (
               <div className="flex items-center gap-3 mt-1 p-3 bg-green-50/50 dark:bg-yellow-400/5 border border-green-100 dark:border-yellow-400/20 rounded-2xl shadow-sm">
-                <Image 
-                  src={user.avatar || "https://ui-avatars.com/api/?name=User&background=FFD662&color=000"} 
-                  alt={user.name} 
-                  width={36} 
-                  height={36} 
-                  className="rounded-full border border-white/80 dark:border-slate-600/80 bg-slate-100 object-cover aspect-square" 
-                  unoptimized
-                />
+              <Image 
+                src={user.avatar || "https://ui-avatars.com/api/?name=User&background=FFD662&color=000"} 
+                alt={user.name} 
+                width={28} 
+                height={32} 
+                className="rounded-full border border-white/60 dark:border-slate-600/60 bg-slate-200 dark:bg-slate-800 object-cover aspect-square" 
+                unoptimized
+                onError={(e) => {
+                  // Fallback ke ui-avatars kalau Google image gagal load (429/404)
+                  const target = e.target as HTMLImageElement;
+                  target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=FFD662&color=000&size=128`;
+                }}
+              />
                 <div className="overflow-hidden">
                   <p className="text-xs font-bold text-green-900 dark:text-yellow-400 truncate">{user.name}</p>
                   <p className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">{user.email}</p>

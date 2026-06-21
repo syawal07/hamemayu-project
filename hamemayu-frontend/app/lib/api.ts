@@ -1,5 +1,10 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+const isServer = typeof window === 'undefined';
+
+export const API_BASE_URL = isServer 
+  ? process.env.API_URL || 'http://laravel.test:80/api/v1'
+  : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:80/api/v1';
+
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:80';
 
 interface FetchOptions extends RequestInit {
   requireAuth?: boolean;

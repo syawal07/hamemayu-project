@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { fetchAPI } from '../../lib/api';
+import { extractWishlistCoords } from '../../lib/itinerary-utils';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
@@ -43,6 +44,7 @@ export default function PetaPage() {
 
   const [markers, setMarkers] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [routeDestinations, setRouteDestinations] = useState<{lat: number, lng: number, title: string}[]>([]);
 
   const mapCenter: [number, number] = useMemo(() => {
     if (focusLat && focusLng) {
@@ -50,6 +52,21 @@ export default function PetaPage() {
     }
     return DEFAULT_CENTER;
   }, [focusLat, focusLng]);
+
+  // ✅ Baca query param 'route' untuk navigasi itinerary/wishlist
+  useEffect(() => {
+    const routeParam = searchParams.get('route');
+    if (routeParam) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(routeParam));
+        if (Array.isArray(parsed)) {
+          setRouteDestinations(parsed);
+        }
+      } catch (err) {
+        console.error('Failed to parse route param:', err);
+      }
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -97,7 +114,8 @@ export default function PetaPage() {
            <MapComponent 
              markers={markers} 
              center={mapCenter} 
-             focusSlug={focusSlug} 
+             focusSlug={focusSlug}
+             routeDestinations={routeDestinations}
            />
         )}
       </div>
