@@ -249,13 +249,12 @@ export default function ItineraryPage() {
     
     if (newIndex < 0 || newIndex >= currentDaySlots.length) return;
     
-    // Swap elemen
     [currentDaySlots[slotIndex], currentDaySlots[newIndex]] = [currentDaySlots[newIndex], currentDaySlots[slotIndex]];
     
     updatedDays[dayIndex].slots = currentDaySlots;
     setEditableDays(updatedDays);
     
-    // ✅ AUTO-SAVE ke backend
+    // AUTO-SAVE ke backend
     try {
       await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
         method: 'PUT',
@@ -271,12 +270,11 @@ export default function ItineraryPage() {
     } catch (error) {
       console.error('❌ Gagal auto-save:', error);
       alert('Gagal menyimpan perubahan urutan');
-      // Reload ulang kalau gagal
       handleViewDetail(selectedDetail.id);
     }
   };
 
-  // Fungsi Hapus Destinasi dari Itinerary dengan AUTO-SAVE
+  // Fungsi Hapus Destinasi dari Itinerary
   const handleRemoveDestination = async (dayIndex: number, slotIndex: number) => {
     if (!confirm('HAPUS DESTINASI INI DARI ITINERARY?')) return;
     
@@ -305,6 +303,38 @@ export default function ItineraryPage() {
       alert('GAGAL HAPUS DESTINASI.');
       handleViewDetail(selectedDetail.id);
     }
+  };
+
+  // Fungsi Navigasi per Slot
+  const handleNavigateSlot = async (slot: ItinerarySlot, dayIndex: number) => {
+    try {
+      const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
+      const singleSlot = { ...slot };
+      
+      const destinations = await extractItineraryCoords({ 
+          itinerary_data: { days: [{ day: dayIndex + 1, slots: [singleSlot] }] } 
+      });
+      
+      if (destinations.length > 0) {
+          window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
+      } else {
+          // Fallback: Cari berdasarkan title
+          const markers: any[] = await fetchAPI('/map-markers');
+          const matchedMarker = markers.find(m => 
+              m.title.toLowerCase().includes(slot.title.toLowerCase()) ||
+              slot.title.toLowerCase().includes(m.title.toLowerCase())
+          );
+          
+          if (matchedMarker && matchedMarker.lat && matchedMarker.lng) {
+              window.location.href = `/dashboard/peta?focus=${matchedMarker.slug}&lat=${matchedMarker.lat}&lng=${matchedMarker.lng}`;
+          } else {
+              alert(`📍 "${slot.title}" tidak memiliki koordinat di database.\n\nTips: Tambahkan destinasi ini ke Wishlist dulu.`);
+          }
+      }
+   } catch (err) { 
+       console.error("Navigation Error:", err);
+       alert("Gagal membuka peta.");
+   }
   };
 
   return (
@@ -389,7 +419,7 @@ export default function ItineraryPage() {
 
           <div className="bg-white/60 dark:bg-brutal-dark/60 rounded-[2.5rem] p-8 md:p-12 border border-white/60 dark:border-slate-700/50">
             
-            {/* Header dengan Edit Judul - Clean Inline */}
+            {/* Header dengan Edit Judul */}
             <div className="mb-8">
               <div className="flex items-start justify-between border-b border-slate-200 dark:border-slate-700 pb-6 mb-6">
                  <div className="flex-1">
@@ -455,7 +485,6 @@ export default function ItineraryPage() {
                  </div>
               </div>
               
-              {/* Mobile Stats */}
                <div className="grid grid-cols-3 gap-4 font-mono text-sm text-slate-600 dark:text-slate-400 mb-8 md:hidden">
                  <div><span className="block text-xs uppercase">Hari</span>{selectedDetail.days}</div>
                  <div><span className="block text-xs uppercase">Anggaran</span>{selectedDetail.budget_type}</div>
@@ -473,7 +502,6 @@ export default function ItineraryPage() {
               
               {editableDays.map((dayPlan, dayIndex) => (
                 <div key={dayIndex} className="mb-10 pl-8 md:pl-12 border-l-2 border-dashed border-slate-200 dark:border-slate-700 relative">
-                  {/* Label Hari */}
                   <div className="absolute -left-[42px] md:-left-[46px] top-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-full font-mono text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm">
                     H{dayPlan.day}
                   </div>
@@ -499,7 +527,7 @@ export default function ItineraryPage() {
                             {slot.notes && <p className="text-xs text-slate-500 mt-2 italic">"{slot.notes}"</p>}
                           </div>
 
-                          {/* Actions Group - Always Visible */}
+                          {/* Actions Group */}
                           <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
                              {/* Reorder Buttons */}
                              <div className="flex flex-col border-r border-slate-200 dark:border-slate-700 pr-2 mr-2">
@@ -537,30 +565,16 @@ export default function ItineraryPage() {
                              </button>
                              
                              {/* Navigation Button */}
-                             {slot.content_id && (
-                                <button
-                                  onClick={async () => {
-                                     try {
-                                        const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
-                                        const singleSlot = { ...slot };
-                                        const destinations = await extractItineraryCoords({ 
-                                            itinerary_data: { days: [{ day: dayIndex + 1, slots: [singleSlot] }] } 
-                                        });
-                                        
-                                        if (destinations.length > 0) {
-                                            window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
-                                        }
-                                     } catch (err) { alert("Error peta"); }
-                                  }}
-                                  className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg p-2 transition-all"
-                                  title="Navigasi ke Lokasi"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  </svg>
-                                </button>
-                             )}
+                             <button
+                                onClick={() => handleNavigateSlot(slot, dayIndex)}
+                                className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg p-2 transition-all"
+                                title="Navigasi ke Lokasi"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              </button>
                           </div>
                         </div>
                       </div>
