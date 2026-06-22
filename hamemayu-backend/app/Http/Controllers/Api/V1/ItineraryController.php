@@ -77,4 +77,47 @@ class ItineraryController extends Controller
             'data' => $itinerary
         ]);
     }
+
+    public function update(Request $request, $id)
+    {
+        try {
+            // Cari itinerary berdasarkan ID dan user_id (security check)
+            $itinerary = \App\Models\Itinerary::where('user_id', auth()->id())->findOrFail($id);
+            
+            // Update hanya field yang dikirim dan valid
+            $fillableFields = ['title', 'days', 'budget_type', 'total_destinations', 'estimated_budget'];
+            foreach ($fillableFields as $field) {
+                if ($request->has($field)) {
+                    $itinerary->$field = $request->input($field);
+                }
+            }
+            
+            // Handle itinerary_data (JSON) secara khusus
+            if ($request->has('itinerary_data')) {
+                $itinerary->itinerary_data = $request->input('itinerary_data');
+            }
+            
+            $itinerary->save();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Itinerary berhasil diupdate!',
+                'data' => $itinerary
+            ]);
+            
+        } catch (\Exception $e) {
+            // Log error untuk debugging
+            \Log::error('Itinerary Update Failed', [
+                'id' => $id,
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'payload' => $request->all()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
