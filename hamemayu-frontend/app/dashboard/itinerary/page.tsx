@@ -57,6 +57,13 @@ interface ItineraryDetail {
   created_at: string;
 }
 
+interface DestWithCoords {
+  lat: number;
+  lng: number;
+  title: string;
+  content_id?: number;
+}
+
 export default function ItineraryPage() {
   const [activeTab, setActiveTab] = useState<'history' | 'generate' | 'detail'>('history');
   const [historyList, setHistoryList] = useState<ItineraryHistory[]>([]);
@@ -75,12 +82,12 @@ export default function ItineraryPage() {
   const [selectedDetail, setSelectedDetail] = useState<ItineraryDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
-  // State untuk Edit Judul
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-
-  // State untuk Editing Slots
   const [editableDays, setEditableDays] = useState<ItineraryDay[] | null>(null);
+  
+  // State untuk GPS user
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
   // Load History
   useEffect(() => {
@@ -115,6 +122,27 @@ export default function ItineraryPage() {
       }
     });
     return () => { isMounted = false; };
+  }, []);
+
+  // Get User Location
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      console.warn("Geolocation tidak didukung");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+      },
+      (error) => {
+        console.warn("GPS Error:", error);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   }, []);
 
   const toggleInterest = (slug: string) => {
@@ -218,7 +246,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // Fungsi Update Judul Itinerary
   const handleUpdateTitle = async () => {
     if (!selectedDetail || !newTitle.trim()) return;
     
@@ -238,7 +265,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // Fungsi Reorder Slot dengan AUTO-SAVE
   const moveSlot = async (dayIndex: number, slotIndex: number, direction: 'up' | 'down') => {
     if (!editableDays || !selectedDetail) return;
     
@@ -254,7 +280,6 @@ export default function ItineraryPage() {
     updatedDays[dayIndex].slots = currentDaySlots;
     setEditableDays(updatedDays);
     
-    // AUTO-SAVE ke backend
     try {
       await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
         method: 'PUT',
@@ -274,7 +299,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // Fungsi Hapus Destinasi dari Itinerary
   const handleRemoveDestination = async (dayIndex: number, slotIndex: number) => {
     if (!confirm('HAPUS DESTINASI INI DARI ITINERARY?')) return;
     
@@ -305,7 +329,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // Fungsi Navigasi per Slot
   const handleNavigateSlot = async (slot: ItinerarySlot, dayIndex: number) => {
     try {
       const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
@@ -318,7 +341,6 @@ export default function ItineraryPage() {
       if (destinations.length > 0) {
           window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
       } else {
-          // Fallback: Cari berdasarkan title
           const markers: any[] = await fetchAPI('/map-markers');
           const matchedMarker = markers.find(m => 
               m.title.toLowerCase().includes(slot.title.toLowerCase()) ||
@@ -328,13 +350,135 @@ export default function ItineraryPage() {
           if (matchedMarker && matchedMarker.lat && matchedMarker.lng) {
               window.location.href = `/dashboard/peta?focus=${matchedMarker.slug}&lat=${matchedMarker.lat}&lng=${matchedMarker.lng}`;
           } else {
-              alert(`📍 "${slot.title}" tidak memiliki koordinat di database.\n\nTips: Tambahkan destinasi ini ke Wishlist dulu.`);
+              alert(`📍 "${slot.title}" tidak memiliki koordinat di database.`);
           }
       }
    } catch (err) { 
        console.error("Navigation Error:", err);
        alert("Gagal membuka peta.");
    }
+  };
+
+  // ✅ Fungsi Navigasi Semua Destinasi dengan Optimasi Rute
+  const handleNavigateAllOptimized = async () => {
+    if (!selectedDetail || !editableDays) return;
+
+    // Cek apakah user sudah izin GPS
+    if (!userLocation) {
+      alert('📍 Mohon izinkan akses lokasi (GPS) untuk optimasi rute otomatis.');
+      return;
+    }
+
+    try {
+      // 1. Kumpulkan semua destinasi dari semua hari
+      const allDestinations: DestWithCoords[] = [];
+      
+      for (const day of editableDays) {
+        for (const slot of day.slots) {
+          const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
+          const destinations = await extractItineraryCoords({
+            itinerary_data: { days: [{ day: day.day, slots: [slot] }] }
+          });
+          
+          if (destinations.length > 0) {
+            allDestinations.push(...destinations);
+          } else {
+            // Fallback: cari via map-markers
+            const markers: any[] = await fetchAPI('/map-markers');
+            const matchedMarker = markers.find(m => 
+              m.title.toLowerCase().includes(slot.title.toLowerCase()) ||
+              slot.title.toLowerCase().includes(m.title.toLowerCase())
+            );
+            
+            if (matchedMarker && matchedMarker.lat && matchedMarker.lng) {
+              allDestinations.push({
+                lat: matchedMarker.lat,
+                lng: matchedMarker.lng,
+                title: matchedMarker.title,
+                content_id: matchedMarker.id
+              });
+            }
+          }
+        }
+      }
+
+      if (allDestinations.length === 0) {
+        alert('⚠️ Tidak ada destinasi dengan koordinat valid di itinerary ini.');
+        return;
+      }
+
+      // 2. Optimasi rute: urutkan berdasarkan jarak dari posisi user (Nearest Neighbor)
+      const optimizedRoute = optimizeRouteByDistance(userLocation, allDestinations);
+
+      // 3. Redirect ke peta dengan route yang sudah dioptimasi
+      window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(optimizedRoute))}&optimized=true`;
+      
+    } catch (err) {
+      console.error("Optimized Navigation Error:", err);
+      alert('Gagal memuat rute optimasi.');
+    }
+  };
+
+  // ✅ Helper: Hitung jarak Haversine (km)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Radius bumi dalam km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // ✅ Helper: Optimasi rute dengan algoritma Nearest Neighbor
+  const optimizeRouteByDistance = (
+    startPoint: {lat: number, lng: number}, 
+    destinations: DestWithCoords[]
+  ): DestWithCoords[] => {
+    const optimized: DestWithCoords[] = [];
+    const remaining = [...destinations];
+    let currentPos = startPoint;
+
+    while (remaining.length > 0) {
+      // Cari destinasi terdekat dari posisi saat ini
+      let nearestIndex = 0;
+      let nearestDist = Infinity;
+
+      for (let i = 0; i < remaining.length; i++) {
+        const dist = calculateDistance(
+          currentPos.lat, currentPos.lng,
+          remaining[i].lat, remaining[i].lng
+        );
+        
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestIndex = i;
+        }
+      }
+
+      // Tambahkan ke route yang sudah dioptimasi
+      const nearest = remaining.splice(nearestIndex, 1)[0];
+      optimized.push(nearest);
+      currentPos = { lat: nearest.lat, lng: nearest.lng };
+    }
+
+    console.log(`✅ Rute dioptimasi: ${optimized.length} destinasi, total jarak ~${calculateTotalDistance(startPoint, optimized).toFixed(1)} km`);
+    return optimized;
+  };
+
+  // ✅ Helper: Hitung total jarak rute
+  const calculateTotalDistance = (start: {lat: number, lng: number}, route: DestWithCoords[]): number => {
+    let total = 0;
+    let current = start;
+    
+    for (const dest of route) {
+      total += calculateDistance(current.lat, current.lng, dest.lat, dest.lng);
+      current = dest;
+    }
+    
+    return total;
   };
 
   return (
@@ -493,6 +637,29 @@ export default function ItineraryPage() {
 
             </div>
 
+            {/* Tombol Navigasi Massal dengan Optimasi */}
+            <div className="mb-8 flex flex-wrap gap-3">
+              <button
+                onClick={handleNavigateAllOptimized}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 dark:from-yellow-400 dark:to-yellow-500 text-white dark:text-slate-900 font-mono text-xs font-bold px-6 py-3 rounded-xl hover:from-green-700 hover:to-emerald-700 dark:hover:from-yellow-500 dark:hover:to-yellow-600 transition-all shadow-lg hover:shadow-xl active:scale-95 uppercase tracking-wide"
+                title="Navigasi semua destinasi dengan rute terdekat dari posisimu"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 3V4m0 0L9 7" />
+                </svg>
+                🗺️ Navigasi Semua (Optimized)
+              </button>
+              
+              {userLocation && (
+                <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="font-mono text-[10px] font-bold text-green-700 dark:text-green-400 uppercase">
+                    GPS Aktif
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Jadwal */}
             <div>
               <h3 className="font-mono text-sm font-bold uppercase mb-6 flex items-center gap-2">
@@ -511,7 +678,6 @@ export default function ItineraryPage() {
                       <div key={slotIndex} className="bg-white/60 dark:bg-slate-800/40 backdrop-blur-sm p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all group">
                         
                         <div className="flex flex-col md:flex-row md:items-center gap-4">
-                          {/* Info Slot */}
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2 flex-wrap">
                                 <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-3 py-1 rounded-full font-mono text-[10px] font-bold uppercase shadow-sm">
@@ -527,9 +693,7 @@ export default function ItineraryPage() {
                             {slot.notes && <p className="text-xs text-slate-500 mt-2 italic">"{slot.notes}"</p>}
                           </div>
 
-                          {/* Actions Group */}
                           <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
-                             {/* Reorder Buttons */}
                              <div className="flex flex-col border-r border-slate-200 dark:border-slate-700 pr-2 mr-2">
                                <button 
                                  onClick={() => moveSlot(dayIndex, slotIndex, 'up')}
@@ -553,7 +717,6 @@ export default function ItineraryPage() {
                                </button>
                              </div>
 
-                             {/* Delete Button */}
                              <button
                                 onClick={() => handleRemoveDestination(dayIndex, slotIndex)}
                                 className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg p-2 transition-all"
@@ -564,7 +727,6 @@ export default function ItineraryPage() {
                                 </svg>
                              </button>
                              
-                             {/* Navigation Button */}
                              <button
                                 onClick={() => handleNavigateSlot(slot, dayIndex)}
                                 className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg p-2 transition-all"
