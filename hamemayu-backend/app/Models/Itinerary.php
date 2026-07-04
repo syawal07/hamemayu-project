@@ -13,6 +13,8 @@ class Itinerary extends Model
     protected $fillable = [
         'user_id',
         'title',
+        'start_date',
+        'end_date',
         'days',
         'budget_type',
         'total_destinations',
@@ -21,10 +23,19 @@ class Itinerary extends Model
     ];
 
     protected $casts = [
+        'start_date' => 'datetime',
+        'end_date' => 'datetime',
         'days' => 'integer',
-        'total_destinations' => 'integer',
         'itinerary_data' => 'array',
     ];
+
+    public function getDaysAttribute($value)
+    {
+        if ($this->start_date && $this->end_date) {
+            return $this->start_date->diffInDays($this->end_date) + 1;
+        }
+        return $value ?? 0;
+    }
 
     public function user(): BelongsTo
     {

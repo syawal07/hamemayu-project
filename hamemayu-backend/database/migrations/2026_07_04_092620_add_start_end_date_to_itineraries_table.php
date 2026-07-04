@@ -9,16 +9,17 @@ return new class extends Migration
     public function up()
     {
         Schema::table('itineraries', function (Blueprint $table) {
-            // Tambah kolom JSON untuk menyimpan data itinerary lengkap
-            // nullable() biar itinerary lama yang belum punya data ini nggak error
-            $table->json('itinerary_data')->nullable()->after('estimated_budget');
+            // ✅ Tambah kolom start_date & end_date
+            $table->timestamp('start_date')->nullable()->after('title');
+            $table->timestamp('end_date')->nullable()->after('start_date');
         });
     }
-
+    
     public function down()
     {
         Schema::table('itineraries', function (Blueprint $table) {
-            $table->dropColumn('itinerary_data');
+            // ✅ Hapus kolom kalau rollback
+            $table->dropColumn(['start_date', 'end_date']);
         });
     }
 };

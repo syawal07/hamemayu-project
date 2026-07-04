@@ -13,6 +13,8 @@ interface Category {
 interface ItineraryHistory {
   id: number;
   title: string;
+  start_date?: string;
+  end_date?: string;
   days: number;
   created_at?: string;
 }
@@ -46,6 +48,8 @@ interface ItineraryGenerateResponse {
 interface ItineraryDetail {
   id: number;
   title: string;
+  start_date?: string;
+  end_date?: string;
   days: number;
   budget_type: string;
   total_destinations: number;
@@ -57,92 +61,60 @@ interface ItineraryDetail {
   created_at: string;
 }
 
-interface DestWithCoords {
-  lat: number;
-  lng: number;
-  title: string;
-  content_id?: number;
-}
-
 export default function ItineraryPage() {
-  const [activeTab, setActiveTab] = useState<'history' | 'generate' | 'detail'>('history');
+  // ✅ Tabs: "BUAT" & "DAFTAR" (bukan riwayat/generate)
+  const [activeTab, setActiveTab] = useState<'create' | 'list' | 'detail'>('list');
+  
   const [historyList, setHistoryList] = useState<ItineraryHistory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  const [formDays, setFormDays] = useState<number>(1);
-  const [formBudget, setFormBudget] = useState<string>('hemat');
-  const [useWishlist, setUseWishlist] = useState<boolean>(false);
+  // ✅ Form State untuk Date Range
+  const [formTitle, setFormTitle] = useState('Rencana Eksplorasi Baru');
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('08:00');
+  const [endDate, setEndDate] = useState('');
+  const [endTime, setEndTime] = useState('20:00');
+  
+  const [formBudget, setFormBudget] = useState('hemat');
+  const [generateMode, setGenerateMode] = useState<'ai' | 'manual'>('ai');
+  const [useWishlist, setUseWishlist] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  const [formTitle, setFormTitle] = useState<string>('Rencana Eksplorasi Baru');
 
   const [generatedResult, setGeneratedResult] = useState<ItineraryGenerateResponse | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<ItineraryDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [editableDays, setEditableDays] = useState<ItineraryDay[] | null>(null);
-  
-  // State untuk GPS user
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
   // Load History
   useEffect(() => {
-    let isMounted = true;
+    if (activeTab !== 'list' && activeTab !== 'detail') return;
     
     const loadHistory = async () => {
-      if (activeTab !== 'history') return;
       setLoading(true);
       try {
         const res = await fetchAPI<ItineraryHistory[]>('/itinerary/history', { requireAuth: true });
-        if (res && Array.isArray(res) && isMounted) {
+        if (res && Array.isArray(res)) {
           setHistoryList(res);
         }
       } catch (error) {
         console.error(error);
       } finally {
-        if (isMounted) setLoading(false);
+        setLoading(false);
       }
     };
-
     loadHistory();
-    return () => { isMounted = false; };
   }, [activeTab]);
 
   // Load Categories
   useEffect(() => {
-    let isMounted = true;
     fetchAPI<Category[]>('/categories').then(res => {
-      if (res && Array.isArray(res) && isMounted) {
+      if (res && Array.isArray(res)) {
         setCategories(res);
         if (res.length > 0) setSelectedInterests([res[0].slug]);
       }
     });
-    return () => { isMounted = false; };
-  }, []);
-
-  // Get User Location
-  useEffect(() => {
-    if (!("geolocation" in navigator)) {
-      console.warn("Geolocation tidak didukung");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-      },
-      (error) => {
-        console.warn("GPS Error:", error);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
   }, []);
 
   const toggleInterest = (slug: string) => {
@@ -153,10 +125,25 @@ export default function ItineraryPage() {
     );
   };
 
+  // ✅ Hitung jumlah hari otomatis dari date range
+  const calculateDays = () => {
+    if (!startDate || !endDate) return 0;
+    const start = new Date(`${startDate}T${startTime}`);
+    const end = new Date(`${endDate}T${endTime}`);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+  };
+
+  // ✅ Handle Generate Itinerary (AI/Manual)
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedInterests.length === 0) {
-      alert("MOHON PILIH MINIMAL SATU FOKUS MINAT EKSPLORASI.");
+    
+    if (!startDate || !endDate) {
+      alert('MOHON PILIH TANGGAL MULAI DAN SELESAI');
+      return;
+    }
+    if (selectedInterests.length === 0 && generateMode === 'ai') {
+      alert("MOHON PILIH MINIMAL SATU FOKUS MINAT");
       return;
     }
 
@@ -164,15 +151,22 @@ export default function ItineraryPage() {
     setGeneratedResult(null);
 
     try {
+      const payload: any = {
+        start_date: `${startDate} ${startTime}:00`,
+        end_date: `${endDate} ${endTime}:00`,
+        mode: generateMode,
+        budget: formBudget,
+        use_wishlist: useWishlist,
+      };
+      
+      if (generateMode === 'ai') {
+        payload.interests = selectedInterests;
+      }
+
       const res = await fetchAPI<ItineraryGenerateResponse>('/itinerary/generate', {
         method: 'POST',
         requireAuth: true,
-        body: JSON.stringify({
-          days: formDays,
-          budget: formBudget,
-          use_wishlist: useWishlist,
-          interests: selectedInterests 
-        })
+        body: JSON.stringify(payload)
       });
 
       if (res) {
@@ -180,19 +174,22 @@ export default function ItineraryPage() {
       }
     } catch (error) {
       console.error(error);
-      alert('GAGAL MENGHASILKAN ITINERARY.');
+      alert('GAGAL MENGHASILKAN ITINERARY');
     } finally {
       setIsGenerating(false);
     }
   };
 
+  // ✅ Handle Save Generated Itinerary
   const handleSaveItinerary = async () => {
     if (!generatedResult) return;
     
     try {
       const payload = {
         title: formTitle,
-        days: formDays,
+        start_date: `${startDate} ${startTime}:00`,
+        end_date: `${endDate} ${endTime}:00`,
+        days: calculateDays(),
         interests: selectedInterests,
         budget_type: formBudget,
         total_destinations: generatedResult.summary.total_destinations || generatedResult.summary.highlights?.length || 0,
@@ -218,12 +215,12 @@ export default function ItineraryPage() {
         body: JSON.stringify(payload)
       });
 
-      alert('ITINERARY BERHASIL DISIMPAN!');
-      setActiveTab('history');
+      alert('✅ ITINERARY BERHASIL DISIMPAN!');
+      setActiveTab('list');
       setGeneratedResult(null);
     } catch (error) {
       console.error(error);
-      alert('GAGAL MENYIMPAN ITINERARY.');
+      alert('GAGAL MENYIMPAN ITINERARY');
     }
   };
 
@@ -234,295 +231,285 @@ export default function ItineraryPage() {
       const res = await fetchAPI<ItineraryDetail>(`/itinerary/history/${id}`, { requireAuth: true });
       if (res) {
         setSelectedDetail(res);
-        setEditableDays(JSON.parse(JSON.stringify(res.itinerary_data.days)));
-        setNewTitle(res.title);
       }
     } catch (error) {
       console.error(error);
-      alert('GAGAL MEMUAT DETAIL.');
-      setActiveTab('history');
+      alert('GAGAL MEMUAT DETAIL');
+      setActiveTab('list');
     } finally {
       setDetailLoading(false);
     }
-  };
-
-  const handleUpdateTitle = async () => {
-    if (!selectedDetail || !newTitle.trim()) return;
-    
-    try {
-      await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
-        method: 'PUT',
-        requireAuth: true,
-        body: JSON.stringify({ title: newTitle.trim() }),
-      });
-      
-      alert('✅ JUDUL BERHASIL DIUPDATE!');
-      setIsEditingTitle(false);
-      handleViewDetail(selectedDetail.id);
-    } catch (error) {
-      console.error("Update Title Error:", error);
-      alert('GAGAL UPDATE JUDUL.');
-    }
-  };
-
-  const moveSlot = async (dayIndex: number, slotIndex: number, direction: 'up' | 'down') => {
-    if (!editableDays || !selectedDetail) return;
-    
-    const updatedDays = [...editableDays];
-    const currentDaySlots = [...updatedDays[dayIndex].slots];
-    
-    const newIndex = direction === 'up' ? slotIndex - 1 : slotIndex + 1;
-    
-    if (newIndex < 0 || newIndex >= currentDaySlots.length) return;
-    
-    [currentDaySlots[slotIndex], currentDaySlots[newIndex]] = [currentDaySlots[newIndex], currentDaySlots[slotIndex]];
-    
-    updatedDays[dayIndex].slots = currentDaySlots;
-    setEditableDays(updatedDays);
-    
-    try {
-      await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
-        method: 'PUT',
-        requireAuth: true,
-        body: JSON.stringify({
-          itinerary_data: {
-            ...selectedDetail.itinerary_data,
-            days: updatedDays
-          }
-        }),
-      });
-      console.log('✅ Urutan berhasil disimpan otomatis');
-    } catch (error) {
-      console.error('❌ Gagal auto-save:', error);
-      alert('Gagal menyimpan perubahan urutan');
-      handleViewDetail(selectedDetail.id);
-    }
-  };
-
-  const handleRemoveDestination = async (dayIndex: number, slotIndex: number) => {
-    if (!confirm('HAPUS DESTINASI INI DARI ITINERARY?')) return;
-    
-    if (!selectedDetail || !editableDays) return;
-
-    const updatedDays = JSON.parse(JSON.stringify(editableDays));
-    updatedDays[dayIndex].slots.splice(slotIndex, 1);
-    setEditableDays(updatedDays);
-
-    try {
-      await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
-        method: 'PUT',
-        requireAuth: true,
-        body: JSON.stringify({
-          itinerary_data: {
-            ...selectedDetail.itinerary_data,
-            days: updatedDays
-          }
-        }),
-      });
-      
-      alert('✅ DESTINASI BERHASIL DIHAPUS!');
-      handleViewDetail(selectedDetail.id);
-    } catch (error) {
-      console.error("Delete Destination Error:", error);
-      alert('GAGAL HAPUS DESTINASI.');
-      handleViewDetail(selectedDetail.id);
-    }
-  };
-
-  const handleNavigateSlot = async (slot: ItinerarySlot, dayIndex: number) => {
-    try {
-      const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
-      const singleSlot = { ...slot };
-      
-      const destinations = await extractItineraryCoords({ 
-          itinerary_data: { days: [{ day: dayIndex + 1, slots: [singleSlot] }] } 
-      });
-      
-      if (destinations.length > 0) {
-          window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
-      } else {
-          const markers: any[] = await fetchAPI('/map-markers');
-          const matchedMarker = markers.find(m => 
-              m.title.toLowerCase().includes(slot.title.toLowerCase()) ||
-              slot.title.toLowerCase().includes(m.title.toLowerCase())
-          );
-          
-          if (matchedMarker && matchedMarker.lat && matchedMarker.lng) {
-              window.location.href = `/dashboard/peta?focus=${matchedMarker.slug}&lat=${matchedMarker.lat}&lng=${matchedMarker.lng}`;
-          } else {
-              alert(`📍 "${slot.title}" tidak memiliki koordinat di database.`);
-          }
-      }
-   } catch (err) { 
-       console.error("Navigation Error:", err);
-       alert("Gagal membuka peta.");
-   }
-  };
-
-  // ✅ Fungsi Navigasi Semua Destinasi dengan Optimasi Rute
-  const handleNavigateAllOptimized = async () => {
-    if (!selectedDetail || !editableDays) return;
-
-    // Cek apakah user sudah izin GPS
-    if (!userLocation) {
-      alert('📍 Mohon izinkan akses lokasi (GPS) untuk optimasi rute otomatis.');
-      return;
-    }
-
-    try {
-      // 1. Kumpulkan semua destinasi dari semua hari
-      const allDestinations: DestWithCoords[] = [];
-      
-      for (const day of editableDays) {
-        for (const slot of day.slots) {
-          const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
-          const destinations = await extractItineraryCoords({
-            itinerary_data: { days: [{ day: day.day, slots: [slot] }] }
-          });
-          
-          if (destinations.length > 0) {
-            allDestinations.push(...destinations);
-          } else {
-            // Fallback: cari via map-markers
-            const markers: any[] = await fetchAPI('/map-markers');
-            const matchedMarker = markers.find(m => 
-              m.title.toLowerCase().includes(slot.title.toLowerCase()) ||
-              slot.title.toLowerCase().includes(m.title.toLowerCase())
-            );
-            
-            if (matchedMarker && matchedMarker.lat && matchedMarker.lng) {
-              allDestinations.push({
-                lat: matchedMarker.lat,
-                lng: matchedMarker.lng,
-                title: matchedMarker.title,
-                content_id: matchedMarker.id
-              });
-            }
-          }
-        }
-      }
-
-      if (allDestinations.length === 0) {
-        alert('⚠️ Tidak ada destinasi dengan koordinat valid di itinerary ini.');
-        return;
-      }
-
-      // 2. Optimasi rute: urutkan berdasarkan jarak dari posisi user (Nearest Neighbor)
-      const optimizedRoute = optimizeRouteByDistance(userLocation, allDestinations);
-
-      // 3. Redirect ke peta dengan route yang sudah dioptimasi
-      window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(optimizedRoute))}&optimized=true`;
-      
-    } catch (err) {
-      console.error("Optimized Navigation Error:", err);
-      alert('Gagal memuat rute optimasi.');
-    }
-  };
-
-  // ✅ Helper: Hitung jarak Haversine (km)
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Radius bumi dalam km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
-  // ✅ Helper: Optimasi rute dengan algoritma Nearest Neighbor
-  const optimizeRouteByDistance = (
-    startPoint: {lat: number, lng: number}, 
-    destinations: DestWithCoords[]
-  ): DestWithCoords[] => {
-    const optimized: DestWithCoords[] = [];
-    const remaining = [...destinations];
-    let currentPos = startPoint;
-
-    while (remaining.length > 0) {
-      // Cari destinasi terdekat dari posisi saat ini
-      let nearestIndex = 0;
-      let nearestDist = Infinity;
-
-      for (let i = 0; i < remaining.length; i++) {
-        const dist = calculateDistance(
-          currentPos.lat, currentPos.lng,
-          remaining[i].lat, remaining[i].lng
-        );
-        
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearestIndex = i;
-        }
-      }
-
-      // Tambahkan ke route yang sudah dioptimasi
-      const nearest = remaining.splice(nearestIndex, 1)[0];
-      optimized.push(nearest);
-      currentPos = { lat: nearest.lat, lng: nearest.lng };
-    }
-
-    console.log(`✅ Rute dioptimasi: ${optimized.length} destinasi, total jarak ~${calculateTotalDistance(startPoint, optimized).toFixed(1)} km`);
-    return optimized;
-  };
-
-  // ✅ Helper: Hitung total jarak rute
-  const calculateTotalDistance = (start: {lat: number, lng: number}, route: DestWithCoords[]): number => {
-    let total = 0;
-    let current = start;
-    
-    for (const dest of route) {
-      total += calculateDistance(current.lat, current.lng, dest.lat, dest.lng);
-      current = dest;
-    }
-    
-    return total;
   };
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12">
       
       {/* Header */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2 drop-shadow-sm">
-            Modul Itinerary
-          </h1>
-          <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
-            Sistem Perencanaan Perjalanan Otomatis
-          </p>
-        </div>
+      <div className="mb-8">
+        <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2">
+          Modul Itinerary
+        </h1>
+        <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
+          Sistem Perencanaan Perjalanan Otomatis
+        </p>
       </div>
 
-      {/* Tabs */}
+      {/* ✅ Tabs: BUAT & DAFTAR */}
       <div className="flex gap-3 mb-8 overflow-x-auto hide-scrollbar pb-2">
         <button 
-          onClick={() => setActiveTab('history')}
+          onClick={() => setActiveTab('create')}
           className={`px-8 py-3 rounded-full font-mono text-xs font-bold transition-all ${
-            activeTab === 'history' || activeTab === 'detail' 
+            activeTab === 'create' 
               ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' 
               : 'bg-white/50 dark:bg-brutal-dark/50 text-slate-600 dark:text-slate-400'
           }`}
         >
-          RIWAYAT
+          ✨ BUAT ITINERARY
         </button>
         <button 
-          onClick={() => setActiveTab('generate')}
+          onClick={() => setActiveTab('list')}
           className={`px-8 py-3 rounded-full font-mono text-xs font-bold transition-all ${
-            activeTab === 'generate' 
+            activeTab === 'list' || activeTab === 'detail'
               ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' 
               : 'bg-white/50 dark:bg-brutal-dark/50 text-slate-600 dark:text-slate-400'
           }`}
         >
-          GENERATOR
+          📋 DAFTAR ITINERARY
         </button>
       </div>
 
-      {/* TAB: HISTORY */}
-      {activeTab === 'history' && (
-        <div className="flex flex-col gap-4">
+      {/* ✅ TAB: BUAT ITINERARY */}
+      {activeTab === 'create' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* Form Panel */}
+          <div className="lg:col-span-5 bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-2xl p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 h-fit">
+            <h2 className="font-mono font-bold text-sm mb-6 uppercase">Parameter Perjalanan</h2>
+            
+            <form onSubmit={handleGenerate} className="space-y-5">
+              
+              {/* Judul */}
+              <div>
+                <label className="block font-mono text-[10px] font-bold mb-2 uppercase">Judul Perjalanan</label>
+                <input 
+                  type="text"
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50"
+                  placeholder="Contoh: Liburan ke Jogja 2026"
+                  required
+                />
+              </div>
+
+              {/* ✅ Date Range Picker */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-mono text-[10px] font-bold mb-2 uppercase">Mulai</label>
+                  <input 
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50"
+                    required
+                  />
+                  <input 
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full p-2 mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block font-mono text-[10px] font-bold mb-2 uppercase">Selesai</label>
+                  <input 
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50"
+                    required
+                  />
+                  <input 
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full p-2 mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Auto-calculated Days Display */}
+              {calculateDays() > 0 && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                  <p className="text-sm font-bold text-green-700 dark:text-green-400 text-center">
+                    ⏱️ Total: {calculateDays()} Hari
+                  </p>
+                </div>
+              )}
+
+              {/* Mode Selector: AI vs Manual */}
+              <div>
+                <label className="block font-mono text-[10px] font-bold mb-3 uppercase">Mode Generate</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGenerateMode('ai')}
+                    className={`flex-1 p-3 rounded-xl border-2 text-xs font-bold transition-all ${
+                      generateMode === 'ai'
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                        : 'border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    🤖 AI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGenerateMode('manual')}
+                    className={`flex-1 p-3 rounded-xl border-2 text-xs font-bold transition-all ${
+                      generateMode === 'manual'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                        : 'border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    📝 Manual
+                  </button>
+                </div>
+              </div>
+
+              {/* AI Mode Options */}
+              {generateMode === 'ai' && (
+                <>
+                  <div>
+                    <label className="block font-mono text-[10px] font-bold mb-3 uppercase">Minat/Kategori</label>
+                    <div className="flex flex-wrap gap-2">
+                      {categories.map(cat => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => toggleInterest(cat.slug)}
+                          className={`px-3 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase transition-all ${
+                            selectedInterests.includes(cat.slug)
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          {cat.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={useWishlist}
+                      onChange={(e) => setUseWishlist(e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <label className="text-xs font-bold">Prioritaskan Wishlist saya</label>
+                  </div>
+                </>
+              )}
+
+              {/* Budget */}
+              <div>
+                <label className="block font-mono text-[10px] font-bold mb-2 uppercase">Profil Anggaran</label>
+                <select 
+                  value={formBudget}
+                  onChange={(e) => setFormBudget(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50"
+                >
+                  <option value="hemat">HEMAT</option>
+                  <option value="normal">NORMAL</option>
+                  <option value="mewah">MEWAH</option>
+                </select>
+              </div>
+
+              {/* Generate Button */}
+              <button 
+                type="submit" 
+                disabled={isGenerating || !startDate || !endDate}
+                className="w-full bg-slate-900 dark:bg-yellow-400 text-white dark:text-slate-900 py-4 rounded-xl font-mono text-xs font-bold uppercase disabled:opacity-50"
+              >
+                {isGenerating ? 'MEMPROSES...' : '✨ GENERATE ITINERARY'}
+              </button>
+            </form>
+          </div>
+
+          {/* Result Panel */}
+          <div className="lg:col-span-7">
+            {!generatedResult && !isGenerating && (
+              <div className="h-full min-h-[400px] border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-3xl flex flex-col items-center justify-center p-8 text-center">
+                <p className="font-mono text-slate-500 text-sm">Pilih parameter & klik Generate untuk mulai</p>
+              </div>
+            )}
+
+            {isGenerating && (
+              <div className="h-full min-h-[400px] rounded-3xl flex flex-col items-center justify-center p-8 bg-white/60 dark:bg-brutal-dark/60">
+                <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="font-mono text-sm font-bold uppercase animate-pulse">Menyusun rute optimal...</p>
+              </div>
+            )}
+
+            {generatedResult && !isGenerating && (
+              <div className="bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50">
+                <div className="flex justify-between items-start mb-6">
+                  <h3 className="font-serif text-2xl font-bold">Hasil Generate</h3>
+                  <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-3 py-1 rounded-full font-mono text-[10px] font-bold uppercase">SUKSES</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 mb-6 font-mono text-sm">
+                  <div className="p-3 bg-white/50 dark:bg-slate-800/40 rounded-xl">
+                    <p className="text-[10px] text-slate-500 uppercase">Hari</p>
+                    <p className="font-bold text-lg">{generatedResult.summary.total_days}</p>
+                  </div>
+                  <div className="p-3 bg-white/50 dark:bg-slate-800/40 rounded-xl">
+                    <p className="text-[10px] text-slate-500 uppercase">Destinasi</p>
+                    <p className="font-bold text-lg">{generatedResult.summary.total_destinations}</p>
+                  </div>
+                  <div className="p-3 bg-white/50 dark:bg-slate-800/40 rounded-xl col-span-3">
+                    <p className="text-[10px] text-slate-500 uppercase">Estimasi Biaya</p>
+                    <p className="font-bold text-lg text-green-700 dark:text-green-400">{generatedResult.summary.estimated_total_budget}</p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <h4 className="font-mono text-xs font-bold uppercase mb-3">Highlight Destinasi</h4>
+                  <ul className="space-y-2">
+                    {generatedResult.summary.highlights?.map((h, i) => (
+                      <li key={i} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/30 rounded-xl">
+                        <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center justify-center text-xs font-bold">{i+1}</span>
+                        <span className="font-mono text-sm">{h}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                  <label className="block font-mono text-[10px] font-bold mb-3 uppercase">Nama untuk Disimpan</label>
+                  <div className="flex gap-3">
+                    <input 
+                      type="text"
+                      value={formTitle}
+                      onChange={(e) => setFormTitle(e.target.value)}
+                      className="flex-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700"
+                    />
+                    <button
+                      onClick={handleSaveItinerary}
+                      className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-mono text-xs font-bold rounded-xl uppercase"
+                    >
+                      💾 SIMPAN
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: DAFTAR ITINERARY */}
+      {activeTab === 'list' && (
+        <div>
           {loading ? (
             <div className="text-center py-20">Loading...</div>
           ) : historyList.length > 0 ? (
@@ -530,10 +517,19 @@ export default function ItineraryPage() {
               {historyList.map(item => (
                 <div key={item.id} className="bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50">
                   <h3 className="font-serif text-xl font-bold mb-2">{item.title}</h3>
-                  <p className="font-mono text-sm text-slate-500 mb-4">{item.days} Hari</p>
+                  
+                  {/* Tampilkan Date Range jika ada */}
+                  {item.start_date && item.end_date ? (
+                    <p className="font-mono text-xs text-slate-500 mb-2">
+                      📅 {new Date(item.start_date).toLocaleDateString('id-ID')} - {new Date(item.end_date).toLocaleDateString('id-ID')}
+                    </p>
+                  ) : (
+                    <p className="font-mono text-xs text-slate-500 mb-2">{item.days} Hari</p>
+                  )}
+                  
                   <button 
                     onClick={() => handleViewDetail(item.id)}
-                    className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-mono text-xs font-bold uppercase"
+                    className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-mono text-xs font-bold uppercase mt-4"
                   >
                     LIHAT DETAIL
                   </button>
@@ -543,7 +539,7 @@ export default function ItineraryPage() {
           ) : (
             <div className="text-center py-20">
               <p className="mb-4">Belum ada itinerary</p>
-              <button onClick={() => setActiveTab('generate')} className="text-green-700 font-bold">
+              <button onClick={() => setActiveTab('create')} className="text-green-700 font-bold">
                 Buat Itinerary →
               </button>
             </div>
@@ -551,193 +547,60 @@ export default function ItineraryPage() {
         </div>
       )}
 
-      {/* TAB: DETAIL */}
-      {activeTab === 'detail' && selectedDetail && editableDays && (
+      {/* TAB: DETAIL ITINERARY */}
+      {activeTab === 'detail' && selectedDetail && (
         <div>
           <button 
-            onClick={() => setActiveTab('history')} 
+            onClick={() => setActiveTab('list')} 
             className="mb-6 font-mono text-xs font-bold"
           >
-            ← KEMBALI
+            ← KEMBALI KE DAFTAR
           </button>
 
-          <div className="bg-white/60 dark:bg-brutal-dark/60 rounded-[2.5rem] p-8 md:p-12 border border-white/60 dark:border-slate-700/50">
-            
-            {/* Header dengan Edit Judul */}
-            <div className="mb-8">
-              <div className="flex items-start justify-between border-b border-slate-200 dark:border-slate-700 pb-6 mb-6">
-                 <div className="flex-1">
-                    {isEditingTitle ? (
-                        <div className="flex items-center gap-3 animate-in slide-in-from-left duration-200">
-                            <div className="flex-1 relative">
-                                <input
-                                    type="text"
-                                    value={newTitle}
-                                    onChange={(e) => setNewTitle(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') handleUpdateTitle();
-                                        if (e.key === 'Escape') setIsEditingTitle(false);
-                                    }}
-                                    className="w-full bg-white dark:bg-slate-800 border-2 border-green-500 dark:border-yellow-400 rounded-xl px-4 py-2.5 font-serif text-2xl font-bold text-slate-900 dark:text-white focus:outline-none shadow-lg"
-                                    autoFocus
-                                />
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-                                    <button
-                                        onClick={handleUpdateTitle}
-                                        className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-md"
-                                        title="Simpan (Enter)"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </button>
-                                    <button
-                                        onClick={() => setIsEditingTitle(false)}
-                                        className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md"
-                                        title="Batal (Esc)"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            <h2 className="font-serif text-4xl font-bold uppercase text-slate-900 dark:text-white">{selectedDetail.title}</h2>
-                            <button
-                                onClick={() => {
-                                    setNewTitle(selectedDetail.title);
-                                    setIsEditingTitle(true);
-                                }}
-                                className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-xl font-mono text-[10px] font-bold uppercase hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-all hover:scale-105 active:scale-95 shadow-sm"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                UBAH NAMA
-                            </button>
-                        </>
-                    )}
-                 </div>
-
-                 <div className="grid grid-cols-3 gap-6 font-mono text-sm text-right hidden md:block">
-                    <div><p className="text-slate-500 text-xs">DURASI</p><p className="font-bold text-xl">{selectedDetail.days} HARI</p></div>
-                    <div><p className="text-slate-500 text-xs">ANGGARAN</p><p className="font-bold text-xl uppercase">{selectedDetail.budget_type}</p></div>
-                    <div><p className="text-slate-500 text-xs">ESTIMASI BIAYA</p><p className="font-bold text-xl text-green-700">{selectedDetail.estimated_budget}</p></div>
-                 </div>
-              </div>
+          <div className="bg-white/60 dark:bg-brutal-dark/60 rounded-3xl p-8 border border-white/60 dark:border-slate-700/50">
+            {/* Header */}
+            <div className="mb-6">
+              <h2 className="font-serif text-3xl font-bold uppercase mb-2">{selectedDetail.title}</h2>
               
-               <div className="grid grid-cols-3 gap-4 font-mono text-sm text-slate-600 dark:text-slate-400 mb-8 md:hidden">
-                 <div><span className="block text-xs uppercase">Hari</span>{selectedDetail.days}</div>
-                 <div><span className="block text-xs uppercase">Anggaran</span>{selectedDetail.budget_type}</div>
-                 <div><span className="block text-xs uppercase">Biaya</span>{selectedDetail.estimated_budget}</div>
-               </div>
-
-            </div>
-
-            {/* Tombol Navigasi Massal dengan Optimasi */}
-            <div className="mb-8 flex flex-wrap gap-3">
-              <button
-                onClick={handleNavigateAllOptimized}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 dark:from-yellow-400 dark:to-yellow-500 text-white dark:text-slate-900 font-mono text-xs font-bold px-6 py-3 rounded-xl hover:from-green-700 hover:to-emerald-700 dark:hover:from-yellow-500 dark:hover:to-yellow-600 transition-all shadow-lg hover:shadow-xl active:scale-95 uppercase tracking-wide"
-                title="Navigasi semua destinasi dengan rute terdekat dari posisimu"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 3V4m0 0L9 7" />
-                </svg>
-                🗺️ Navigasi Semua (Optimized)
-              </button>
-              
-              {userLocation && (
-                <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="font-mono text-[10px] font-bold text-green-700 dark:text-green-400 uppercase">
-                    GPS Aktif
-                  </span>
+              {/* Date Range Display */}
+              {selectedDetail.start_date && selectedDetail.end_date && (
+                <div className="flex items-center gap-4 mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">📅</span>
+                    <div>
+                      <p className="text-sm font-bold">Periode Perjalanan</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {new Date(selectedDetail.start_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                        {' - '}
+                        {new Date(selectedDetail.end_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <p className="text-sm font-bold">{selectedDetail.days} Hari</p>
+                    <p className="text-xs text-slate-500">{selectedDetail.budget_type?.toUpperCase()}</p>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Jadwal */}
-            <div>
-              <h3 className="font-mono text-sm font-bold uppercase mb-6 flex items-center gap-2">
-                <span className="w-1.5 h-6 bg-green-700 dark:bg-yellow-400 rounded-full"></span>
-                JADWAL_OPERASIONAL
-              </h3>
-              
-              {editableDays.map((dayPlan, dayIndex) => (
-                <div key={dayIndex} className="mb-10 pl-8 md:pl-12 border-l-2 border-dashed border-slate-200 dark:border-slate-700 relative">
-                  <div className="absolute -left-[42px] md:-left-[46px] top-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-full font-mono text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm">
-                    H{dayPlan.day}
+            {/* Itinerary Days */}
+            <div className="space-y-6">
+              {selectedDetail.itinerary_data.days?.map((dayPlan) => (
+                <div key={dayPlan.day} className="p-6 bg-white/50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-serif text-xl font-bold">Hari {dayPlan.day}</h3>
+                    {/* TODO: Tampilkan tanggal & cuaca per hari disini */}
                   </div>
-
-                  <div className="space-y-4">
-                    {dayPlan.slots?.map((slot, slotIndex) => (
-                      <div key={slotIndex} className="bg-white/60 dark:bg-slate-800/40 backdrop-blur-sm p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all group">
-                        
-                        <div className="flex flex-col md:flex-row md:items-center gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-3 py-1 rounded-full font-mono text-[10px] font-bold uppercase shadow-sm">
-                                  {slot.time_slot}
-                                </span>
-                                <span className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase">
-                                  #{slotIndex + 1}
-                                </span>
-                            </div>
-                            <p className="font-mono text-base md:text-lg font-bold leading-snug text-slate-900 dark:text-white">
-                                {slot.title}
-                            </p>
-                            {slot.notes && <p className="text-xs text-slate-500 mt-2 italic">"{slot.notes}"</p>}
-                          </div>
-
-                          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
-                             <div className="flex flex-col border-r border-slate-200 dark:border-slate-700 pr-2 mr-2">
-                               <button 
-                                 onClick={() => moveSlot(dayIndex, slotIndex, 'up')}
-                                 disabled={slotIndex === 0}
-                                 className="text-slate-500 hover:text-blue-600 disabled:opacity-30 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded p-1.5 mb-1 transition-all"
-                                 title="Naik Atas (Auto-save)"
-                               >
-                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                 </svg>
-                               </button>
-                               <button 
-                                 onClick={() => moveSlot(dayIndex, slotIndex, 'down')}
-                                 disabled={slotIndex === dayPlan.slots.length - 1}
-                                 className="text-slate-500 hover:text-blue-600 disabled:opacity-30 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded p-1.5 transition-all"
-                                 title="Turun Bawah (Auto-save)"
-                               >
-                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                 </svg>
-                               </button>
-                             </div>
-
-                             <button
-                                onClick={() => handleRemoveDestination(dayIndex, slotIndex)}
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg p-2 transition-all"
-                                title="Hapus Destinasi"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                             </button>
-                             
-                             <button
-                                onClick={() => handleNavigateSlot(slot, dayIndex)}
-                                className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg p-2 transition-all"
-                                title="Navigasi ke Lokasi"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                              </button>
-                          </div>
+                  
+                  <div className="space-y-3">
+                    {dayPlan.slots?.map((slot, idx) => (
+                      <div key={idx} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-bold bg-slate-200 dark:bg-slate-700 px-3 py-1 rounded-full">
+                            {slot.time_slot}
+                          </span>
+                          <span className="font-mono text-sm font-bold">{slot.title}</span>
                         </div>
                       </div>
                     ))}
@@ -745,99 +608,6 @@ export default function ItineraryPage() {
                 </div>
               ))}
             </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* TAB: GENERATOR */}
-      {activeTab === 'generate' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white/60 dark:bg-brutal-dark/60 p-8 rounded-[2rem] border border-white/60 dark:border-slate-700/50">
-            <h2 className="font-mono font-bold text-sm mb-6 uppercase">PARAMETER</h2>
-            
-            <form onSubmit={handleGenerate} className="space-y-6">
-              <div>
-                <label className="block font-mono text-[10px] font-bold mb-2 uppercase">JUMLAH HARI</label>
-                <input 
-                  type="number" 
-                  min="1" 
-                  max="7"
-                  value={formDays}
-                  onChange={(e) => setFormDays(Number(e.target.value))}
-                  className="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-700"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono text-[10px] font-bold mb-2 uppercase">PROFIL ANGGARAN</label>
-                <select 
-                  value={formBudget}
-                  onChange={(e) => setFormBudget(e.target.value)}
-                  className="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-700"
-                >
-                  <option value="hemat">HEMAT</option>
-                  <option value="normal">NORMAL</option>
-                  <option value="mewah">MEWAH</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-mono text-[10px] font-bold mb-3 uppercase">MINAT</label>
-                <div className="flex flex-wrap gap-2">
-                  {categories.map(cat => (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => toggleInterest(cat.slug)}
-                      className={`px-4 py-2 rounded-full font-mono text-[10px] font-bold uppercase ${
-                        selectedInterests.includes(cat.slug)
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-200 dark:bg-slate-700'
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={isGenerating}
-                className="w-full bg-slate-900 dark:bg-yellow-400 text-white dark:text-slate-900 py-4 rounded-xl font-mono text-xs font-bold uppercase"
-              >
-                {isGenerating ? 'MEMPROSES...' : 'GENERATE'}
-              </button>
-            </form>
-          </div>
-
-          <div>
-            {generatedResult && (
-              <div className="bg-white/60 dark:bg-brutal-dark/60 p-8 rounded-[2rem] border border-white/60 dark:border-slate-700/50">
-                <h3 className="font-serif text-2xl font-bold mb-4">Hasil Generate</h3>
-                <p><b>Hari:</b> {generatedResult.summary.total_days}</p>
-                <p><b>Destinasi:</b> {generatedResult.summary.total_destinations}</p>
-                <p><b>Biaya:</b> {generatedResult.summary.estimated_total_budget}</p>
-                
-                <div className="mt-6">
-                  <label className="block font-mono text-xs mb-2">Judul:</label>
-                  <input
-                    type="text"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    className="w-full p-3 rounded-lg border mb-4"
-                  />
-                  <button
-                    onClick={handleSaveItinerary}
-                    className="w-full bg-green-600 text-white py-3 rounded-lg font-bold uppercase"
-                  >
-                    SIMPAN
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
