@@ -43,44 +43,82 @@ class ItineraryController extends Controller
 
     public function store(Request $request)
     {
-        // Validasi baru: start_date & end_date wajib, days optional (auto-calculate)
+        // ✅ LOG RAW INPUT
+        \Log::info('Itinerary Save Request', [
+            'user_id' => $request->user()->id,
+            'all_input' => $request->all(),
+            'json_input' => json_decode($request->getContent(), true),
+        ]);
+    
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'days' => 'nullable|integer|min:1|max:30',  // Optional, akan di-override
+            'days' => 'nullable|integer|min:1|max:30',
             'budget_type' => 'nullable|string',
-            'total_destinations' => 'required|integer',
+            'total_destinations' => 'nullable|integer',
             'estimated_budget' => 'nullable|string',
             'itinerary_data' => 'required|array',
-            'itinerary_data.summary' => 'required|array',
-            'itinerary_data.summary.total_days' => 'nullable|integer',
-            'itinerary_data.summary.total_destinations' => 'required|integer',
-            'itinerary_data.summary.highlights' => 'required|array',
+            'itinerary_data.summary' => 'nullable|array',
             'itinerary_data.days' => 'required|array',
             'itinerary_data.days.*.day' => 'required|integer',
             'itinerary_data.days.*.slots' => 'required|array',
             'itinerary_data.days.*.slots.*.title' => 'required|string',
             'itinerary_data.days.*.slots.*.time_slot' => 'required|string',
+        ], [
+            'start_date.required' => 'Tanggal mulai wajib diisi',
+            'end_date.required' => 'Tanggal selesai wajib diisi',
+            'itinerary_data.days.required' => 'Data hari wajib diisi',
+            'itinerary_data.days.*.slots.*.title.required' => 'Judul destinasi wajib diisi',
         ]);
-
-        // Auto-calculate days dari rentang tanggal
-        $startDate = Carbon::parse($data['start_date']);
-        $endDate = Carbon::parse($data['end_date']);
-        $data['days'] = $startDate->diffInDays($endDate) + 1;
-
-        // Update summary.total_days juga biar konsisten
+    
+        try {
+            $startDate = Carbon::parse($data['start_date']);
+            $endDate = Carbon::parse($data['end_date']);
+            $data['days'] = $startDate->diffInDays($endDate) + 1;
+        } catch (\Exception $e) {
+            \Log::error('Date Parse Error', ['error' => $e->getMessage(), 'data' => $data]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Format tanggal tidak valid',
+                'errors' => ['start_date' => ['Format harus YYYY-MM-DD HH:mm:ss']]
+            ], 422);
+        }
+    
         if (isset($data['itinerary_data']['summary'])) {
             $data['itinerary_data']['summary']['total_days'] = $data['days'];
+        } else {
+            $data['itinerary_data']['summary'] = [
+                'total_days' => $data['days'],
+                'total_destinations' => $data['total_destinations'] ?? 0,
+                'estimated_total_budget' => $data['estimated_budget'] ?? 'Rp 0',
+                'highlights' => [],
+            ];
         }
-
-        $itinerary = $this->itineraryRepository->saveItinerary($request->user()->id, $data);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Itinerary berhasil disimpan!',
-            'data' => $itinerary
-        ], 201);
+    
+        try {
+            $itinerary = $this->itineraryRepository->saveItinerary($request->user()->id, $data);
+    
+            return response()->json([
+                'success' => true,
+                'message' => 'Itinerary berhasil disimpan!',
+                'data' => $itinerary
+            ], 201);
+            
+        } catch (\Exception $e) {
+            \Log::error('Itinerary Save Failed', [
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'payload' => $data
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan: ' . $e->getMessage(),
+                'errors' => ['general' => [$e->getMessage()]]
+            ], 500);
+        }
     }
 
     public function history(Request $request)
