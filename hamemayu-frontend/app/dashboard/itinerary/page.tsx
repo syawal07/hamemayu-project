@@ -611,11 +611,28 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
     const slots = [...newDays[dayIndex].slots];
     const newIndex = direction === 'up' ? slotIndex - 1 : slotIndex + 1;
     if (newIndex < 0 || newIndex >= slots.length) return;
-    
+  
+    // 1. Tukar posisi destinasi
     [slots[slotIndex], slots[newIndex]] = [slots[newIndex], slots[slotIndex]];
-    newDays[dayIndex].slots = slots;
-    setEditableDays(newDays);
+  
+    // 2. AUTO-URUTKAN JAM BERDASARKAN URUTAN BARU (08:00, 10:30, 13:00, 15:30, 18:00)
+    const baseMinutes = 8 * 60; // Mulai dari 08:00
+    const intervalMinutes = 150; // Jeda 2.5 jam per destinasi
     
+    const reorderedSlots = slots.map((slot, idx) => {
+      const totalMin = baseMinutes + (idx * intervalMinutes);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return {
+        ...slot,
+        time_slot: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      };
+    });
+  
+    newDays[dayIndex].slots = reorderedSlots;
+    setEditableDays(newDays);
+  
+    // Auto-save
     handleUpdateDetail({ itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } });
   };
 
