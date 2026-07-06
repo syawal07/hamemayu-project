@@ -66,6 +66,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/itinerary/history/{id}', [ItineraryController::class, 'show']);
         Route::put('/itinerary/history/{id}', [ItineraryController::class, 'update']);
         Route::delete('/wishlist/bulk', [WishlistController::class, 'destroyBulk']);
+        Route::delete('/itinerary/history/{id}', [ItineraryController::class, 'destroy']);
+        Route::get('/itinerary/weather', [ItineraryController::class, 'getWeatherForecast']);
 
         Route::post('/chat', [ChatController::class, 'chat']);
 

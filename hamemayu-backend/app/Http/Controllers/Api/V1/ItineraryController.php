@@ -188,4 +188,68 @@ class ItineraryController extends Controller
             ], 500);
         }
     }
+
+    // ✅ Method untuk DELETE full itinerary
+    public function destroy(Request $request, int $id)
+    {
+        try {
+            $itinerary = \App\Models\Itinerary::where('user_id', $request->user()->id)->findOrFail($id);
+            $itinerary->delete();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Itinerary berhasil dihapus.'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Itinerary Delete Failed', [
+                'id' => $id,
+                'user_id' => $request->user()->id,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // ✅ Method untuk fetch weather forecast (dummy data untuk testing)
+    public function getWeatherForecast(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'location' => 'nullable|string'
+        ]);
+        
+        $startDate = \Carbon\Carbon::parse($request->start_date);
+        $endDate = \Carbon\Carbon::parse($request->end_date);
+        $days = $startDate->diffInDays($endDate) + 1;
+        
+        // TODO: Integrasi dengan OpenWeatherMap API nanti
+        // For now, return dummy data untuk testing frontend
+        $weatherData = [];
+        $weatherIcons = ['01d', '02d', '03d', '04d', '10d', '09d'];
+        $descriptions = ['Cerah', 'Berawan', 'Mendung', 'Hujan Ringan', 'Hujan', 'Petir'];
+        
+        for ($i = 0; $i < $days; $i++) {
+            $date = $startDate->copy()->addDays($i);
+            $weatherData[] = [
+                'date' => $date->format('Y-m-d'),
+                'day_name' => $date->isoFormat('dddd'),
+                'temp' => rand(24, 32),
+                'description' => $descriptions[array_rand($descriptions)],
+                'icon' => $weatherIcons[array_rand($weatherIcons)],
+                'humidity' => rand(60, 90),
+                'wind_speed' => rand(2, 8),
+            ];
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $weatherData
+        ]);
+    }
+
 }
