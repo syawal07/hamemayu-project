@@ -61,6 +61,15 @@ interface ItineraryDetail {
   created_at: string;
 }
 
+interface ManualDestination {
+  id: number;
+  title: string;
+  content_id: number;
+  category: string;
+  assigned_day?: number;
+  assigned_time?: string;
+}
+
 export default function ItineraryPage() {
   const [activeTab, setActiveTab] = useState<'create' | 'list' | 'detail'>('list');
   
@@ -85,12 +94,17 @@ export default function ItineraryPage() {
   const [selectedDetail, setSelectedDetail] = useState<ItineraryDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // ✅ STATE BARU UNTUK MANUAL MODE
-  const [manualDestinations, setManualDestinations] = useState<any[]>([]);
+  // ✅ STATE BARU UNTUK MANUAL MODE YANG FLEKSIBEL
+  const [manualDestinations, setManualDestinations] = useState<ManualDestination[]>([]);
   const [wishlistItems, setWishlistItems] = useState<any[]>([]);
   const [showDestinationPicker, setShowDestinationPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showScheduler, setShowScheduler] = useState(false); // Modal scheduler
+  const [editableDays, setEditableDays] = useState<ItineraryDay[] | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [weatherForecast, setWeatherForecast] = useState<any[]>([]);
 
   useEffect(() => {
     if (activeTab !== 'list' && activeTab !== 'detail') return;
@@ -114,7 +128,6 @@ export default function ItineraryPage() {
     });
   }, []);
 
-  // ✅ Load Wishlist saat mode Manual dipilih
   useEffect(() => {
     if (generateMode === 'manual') {
       loadWishlist();
@@ -135,7 +148,6 @@ export default function ItineraryPage() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
   };
 
-  // ✅ Load Wishlist dari API
   const loadWishlist = async () => {
     try {
       const res = await fetchAPI('/wishlist', { requireAuth: true });
@@ -145,7 +157,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // ✅ Search database destinasi
   const searchDestinations = async (query: string) => {
     if (!query.trim()) { setSearchResults([]); return; }
     try {
@@ -156,7 +167,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // ✅ Tambah destinasi ke pilihan manual
   const addDestinationToManual = (destination: any) => {
     if (!manualDestinations.find(d => d.id === destination.id)) {
       setManualDestinations([...manualDestinations, {
@@ -164,6 +174,8 @@ export default function ItineraryPage() {
         title: destination.title,
         content_id: destination.id,
         category: destination.category?.name || 'Umum',
+        assigned_day: undefined,
+        assigned_time: undefined,
       }]);
     }
     setShowDestinationPicker(false);
@@ -171,12 +183,32 @@ export default function ItineraryPage() {
     setSearchResults([]);
   };
 
-  // ✅ Hapus destinasi dari pilihan manual
   const removeDestinationFromManual = (id: number) => {
     setManualDestinations(manualDestinations.filter(d => d.id !== id));
   };
 
-  // ✅ Handle Generate untuk Manual Mode
+  // ✅ Update assigned day/time untuk destinasi
+  const updateDestinationSchedule = (destId: number, day: number, time: string) => {
+    setManualDestinations(manualDestinations.map(d => 
+      d.id === destId ? { ...d, assigned_day: day, assigned_time: time } : d
+    ));
+  };
+
+  // ✅ Hapus assignment day/time
+  const clearDestinationSchedule = (destId: number) => {
+    setManualDestinations(manualDestinations.map(d => 
+      d.id === destId ? { ...d, assigned_day: undefined, assigned_time: undefined } : d
+    ));
+  };
+
+  // ✅ Pindah urutan (swap)
+  const swapDestinations = (index1: number, index2: number) => {
+    const newDestinations = [...manualDestinations];
+    [newDestinations[index1], newDestinations[index2]] = [newDestinations[index2], newDestinations[index1]];
+    setManualDestinations(newDestinations);
+  };
+
+  // ✅ Generate dengan scheduler manual
   const handleManualGenerate = async () => {
     if (manualDestinations.length === 0) { alert('PILIH MINIMAL 1 DESTINASI DULU!'); return; }
     if (!startDate || !endDate) { alert('PILIH TANGGAL MULAI DAN SELESAI!'); return; }
@@ -184,20 +216,32 @@ export default function ItineraryPage() {
     setIsGenerating(true);
     try {
       const days = calculateDays();
-      const destinationsPerDay = Math.ceil(manualDestinations.length / days);
       const daysArray = [];
       
-      for (let i = 1; i <= days; i++) {
-        const startIndex = (i - 1) * destinationsPerDay;
-        const dayDestinations = manualDestinations.slice(startIndex, startIndex + destinationsPerDay);
+      // Kelompokkan destinasi berdasarkan hari yang di-assign
+      for (let dayNum = 1; dayNum <= days; dayNum++) {
+        const dayDestinations = manualDestinations.filter(d => d.assigned_day === dayNum);
+        
         daysArray.push({
-          day: i,
-          theme: `Hari ${i} - Eksplorasi`,
-          slots: dayDestinations.map((dest: any, idx: number) => ({
+          day: dayNum,
+          theme: `Hari ${dayNum}`,
+          slots: dayDestinations.map((dest, idx) => ({
             content_id: dest.content_id,
             title: dest.title,
-            time_slot: idx === 0 ? 'pagi' : idx === 1 ? 'siang' : 'sore',
+            time_slot: dest.assigned_time || ['pagi', 'siang', 'sore'][idx % 3],
           })),
+        });
+      }
+      
+      // Destinasi yang belum di-assign, masukkan ke hari pertama
+      const unassigned = manualDestinations.filter(d => !d.assigned_day);
+      if (unassigned.length > 0 && daysArray.length > 0) {
+        unassigned.forEach((dest, idx) => {
+          daysArray[0].slots.push({
+            content_id: dest.content_id,
+            title: dest.title,
+            time_slot: ['pagi', 'siang', 'sore'][idx % 3],
+          });
         });
       }
       
@@ -206,10 +250,12 @@ export default function ItineraryPage() {
           total_days: days,
           total_destinations: manualDestinations.length,
           estimated_total_budget: 'Rp 0 - Rp 0',
-          highlights: manualDestinations.map((d: any) => d.title),
+          highlights: manualDestinations.map((d) => d.title),
         },
         days: daysArray,
       });
+      
+      setShowScheduler(false);
     } catch (error) {
       console.error('Manual generate error:', error);
       alert('GAGAL GENERATE ITINERARY MANUAL');
@@ -248,7 +294,6 @@ export default function ItineraryPage() {
     }
   };
 
-  // ✅ Handle Save Generated Itinerary (FIX: total_destinations INTEGER)
   const handleSaveItinerary = async () => {
     if (!generatedResult || !startDate || !endDate) {
       alert('Mohon lengkapi tanggal mulai dan selesai!');
@@ -259,7 +304,6 @@ export default function ItineraryPage() {
     const endDateTime = `${endDate} ${endTime || '23:59'}:00`;
     const daysArray = generatedResult.days || [];
     
-    // ✅ FIX: PASTIKAN total_destinations INTEGER
     const totalDestinations = generatedResult.summary.total_destinations 
       ? Math.floor(parseInt(String(generatedResult.summary.total_destinations))) 
       : daysArray.reduce((acc: number, day: any) => acc + day.slots.length, 0);
@@ -315,6 +359,7 @@ export default function ItineraryPage() {
       setActiveTab('list');
       setGeneratedResult(null);
       setManualDestinations([]);
+      setShowScheduler(false);
       
     } catch (error: any) {
       console.error("❌ SAVE ERROR:", error);
@@ -327,7 +372,19 @@ export default function ItineraryPage() {
     setDetailLoading(true);
     try {
       const res = await fetchAPI<ItineraryDetail>(`/itinerary/history/${id}`, { requireAuth: true });
-      if (res) setSelectedDetail(res);
+      if (res) {
+        setSelectedDetail(res);
+        setEditableDays(JSON.parse(JSON.stringify(res.itinerary_data.days))); // Deep copy for editing
+        setNewTitle(res.title);
+        
+        // ✅ Fetch Weather Forecast for the date range
+        if (res.start_date && res.end_date) {
+          try {
+            const weatherRes = await fetchAPI(`/itinerary/weather?start_date=${res.start_date}&end_date=${res.end_date}&location=Yogyakarta`);
+            if (weatherRes && weatherRes.data) setWeatherForecast(weatherRes.data);
+          } catch (err) { console.warn("Weather fetch failed", err); }
+        }
+      }
     } catch (error) {
       console.error(error);
       alert('GAGAL MEMUAT DETAIL');
@@ -336,6 +393,83 @@ export default function ItineraryPage() {
       setDetailLoading(false);
     }
   };
+
+    // ✅ UPDATE ITINERARY (AUTO-SAVE)
+    const handleUpdateDetail = async (updatedData: any) => {
+      if (!selectedDetail) return;
+      try {
+        await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
+          method: 'PUT', requireAuth: true, body: JSON.stringify(updatedData)
+        });
+        // Refresh detail to ensure sync
+        handleViewDetail(selectedDetail.id);
+      } catch (error) {
+        console.error("Update failed", error);
+        alert("Gagal menyimpan perubahan");
+      }
+    };
+  
+    // ✅ DELETE FULL ITINERARY
+    const handleDeleteItinerary = async () => {
+      if (!selectedDetail) return;
+      if (!confirm(`Yakin ingin menghapus "${selectedDetail.title}" secara permanen?`)) return;
+      
+      try {
+        await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
+          method: 'DELETE', requireAuth: true
+        });
+        alert('✅ Itinerary berhasil dihapus!');
+        setActiveTab('list');
+        setSelectedDetail(null);
+      } catch (error) {
+        console.error("Delete failed", error);
+        alert("Gagal menghapus itinerary");
+      }
+    };
+  
+    // ✅ EDIT TITLE
+    const handleTitleBlur = () => {
+      if (newTitle.trim() && newTitle !== selectedDetail?.title) {
+        handleUpdateDetail({ title: newTitle });
+      }
+      setIsEditingTitle(false);
+    };
+  
+    // ✅ REORDER SLOT (Move Up/Down)
+    const moveSlot = (dayIndex: number, slotIndex: number, direction: 'up' | 'down') => {
+      if (!editableDays) return;
+      const newDays = [...editableDays];
+      const slots = [...newDays[dayIndex].slots];
+      const newIndex = direction === 'up' ? slotIndex - 1 : slotIndex + 1;
+      if (newIndex < 0 || newIndex >= slots.length) return;
+      
+      [slots[slotIndex], slots[newIndex]] = [slots[newIndex], slots[slotIndex]];
+      newDays[dayIndex].slots = slots;
+      setEditableDays(newDays);
+      
+      // Auto-save
+      handleUpdateDetail({ itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } });
+    };
+  
+    // ✅ DELETE SLOT
+    const deleteSlot = (dayIndex: number, slotIndex: number) => {
+      if (!editableDays) return;
+      if (!confirm("Hapus destinasi ini dari jadwal?")) return;
+      
+      const newDays = [...editableDays];
+      newDays[dayIndex].slots.splice(slotIndex, 1);
+      setEditableDays(newDays);
+      
+      // Auto-save
+      handleUpdateDetail({ itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } });
+    };
+  
+    // ✅ GET WEATHER FOR SPECIFIC DAY
+    const getWeatherForDay = (dayIndex: number) => {
+      return weatherForecast[dayIndex] || null;
+    };
+
+  const timeSlots = ['pagi', 'siang', 'sore', 'malam'];
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12">
@@ -398,7 +532,6 @@ export default function ItineraryPage() {
                 </div>
               )}
               
-              {/* Mode Selector */}
               <div>
                 <label className="block font-mono text-[10px] font-bold mb-3 uppercase">Mode Generate</label>
                 <div className="flex gap-2">
@@ -407,37 +540,46 @@ export default function ItineraryPage() {
                 </div>
               </div>
 
-              {/* MANUAL MODE UI */}
               {generateMode === 'manual' && (
                 <div className="space-y-4">
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
                     <div className="flex justify-between items-center mb-3">
-                      <h3 className="font-mono text-xs font-bold uppercase text-blue-700 dark:text-blue-400">📋 Destinasi Pilihan ({manualDestinations.length})</h3>
+                      <h3 className="font-mono text-xs font-bold uppercase text-blue-700 dark:text-blue-400">📋 Destinasi ({manualDestinations.length})</h3>
                       <button type="button" onClick={() => setShowDestinationPicker(true)} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors">+ Tambah</button>
                     </div>
                     {manualDestinations.length === 0 ? (
                       <p className="text-xs text-blue-600 dark:text-blue-400 italic">Belum ada destinasi dipilih.</p>
                     ) : (
-                      <ul className="space-y-2 max-h-40 overflow-y-auto">
+                      <ul className="space-y-2 max-h-48 overflow-y-auto">
                         {manualDestinations.map((dest, idx) => (
                           <li key={dest.id} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-lg text-xs">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-1">
                               <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold">{idx + 1}</span>
-                              <div><p className="font-bold text-slate-900 dark:text-white">{dest.title}</p><p className="text-[10px] text-slate-500">{dest.category}</p></div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-slate-900 dark:text-white truncate">{dest.title}</p>
+                                <p className="text-[10px] text-slate-500">{dest.category}</p>
+                                {dest.assigned_day && (
+                                  <p className="text-[10px] text-green-600 dark:text-green-400 mt-1">
+                                    Hari {dest.assigned_day} - {dest.assigned_time || 'Belum diatur'}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            <button type="button" onClick={() => removeDestinationFromManual(dest.id)} className="text-red-500 hover:text-red-700 p-1">✕</button>
+                            <div className="flex gap-1">
+                              <button type="button" onClick={() => setShowScheduler(true)} className="text-blue-500 hover:text-blue-700 p-1" title="Atur Jadwal">📅</button>
+                              <button type="button" onClick={() => removeDestinationFromManual(dest.id)} className="text-red-500 hover:text-red-700 p-1">✕</button>
+                            </div>
                           </li>
                         ))}
                       </ul>
                     )}
                   </div>
-                  <button type="button" onClick={handleManualGenerate} disabled={manualDestinations.length === 0 || isGenerating} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-4 rounded-xl font-mono text-xs font-bold uppercase transition-all">
-                    {isGenerating ? 'MEMPROSES...' : '📝 GENERATE ITINERARY MANUAL'}
+                  <button type="button" onClick={() => setShowScheduler(true)} disabled={manualDestinations.length === 0} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-4 rounded-xl font-mono text-xs font-bold uppercase transition-all">
+                    📅 ATUR JADWAL MANUAL
                   </button>
                 </div>
               )}
 
-              {/* AI MODE UI */}
               {generateMode === 'ai' && (
                 <>
                   <div>
@@ -525,41 +667,164 @@ export default function ItineraryPage() {
         </div>
       )}
 
-      {activeTab === 'detail' && selectedDetail && (
+      {/* ✅ DETAIL TAB - UPGRADED WITH EDIT, WEATHER, DELETE */}
+      {activeTab === 'detail' && selectedDetail && editableDays && (
         <div>
-          <button onClick={() => setActiveTab('list')} className="mb-6 font-mono text-xs font-bold">← KEMBALI KE DAFTAR</button>
-          <div className="bg-white/60 dark:bg-brutal-dark/60 rounded-3xl p-8 border border-white/60 dark:border-slate-700/50">
-            <div className="mb-6">
-              <h2 className="font-serif text-3xl font-bold uppercase mb-2">{selectedDetail.title}</h2>
+          <div className="flex items-center justify-between mb-6">
+            <button onClick={() => setActiveTab('list')} className="font-mono text-xs font-bold flex items-center gap-2 hover:text-green-700 transition-colors">
+              ← KEMBALI KE DAFTAR
+            </button>
+            
+            {/* ✅ DELETE BUTTON */}
+            <button 
+              onClick={handleDeleteItinerary}
+              className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg font-mono text-xs font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              HAPUS ITINERARY
+            </button>
+          </div>
+
+          <div className="bg-white/60 dark:bg-brutal-dark/60 rounded-3xl p-8 border border-white/60 dark:border-slate-700/50 shadow-sm">
+            
+            {/* Header: Title & Date */}
+            <div className="mb-8 border-b border-slate-200 dark:border-slate-700 pb-6">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                <div className="flex-1">
+                  {isEditingTitle ? (
+                    <input
+                      type="text"
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      onBlur={handleTitleBlur}
+                      onKeyDown={(e) => e.key === 'Enter' && handleTitleBlur()}
+                      autoFocus
+                      className="text-3xl md:text-4xl font-serif font-bold bg-transparent border-b-2 border-green-500 focus:outline-none w-full pb-2"
+                    />
+                  ) : (
+                    <h2 
+                      onClick={() => setIsEditingTitle(true)}
+                      className="text-3xl md:text-4xl font-serif font-bold uppercase cursor-pointer hover:text-green-700 transition-colors flex items-center gap-3 group"
+                    >
+                      {selectedDetail.title}
+                      <span className="opacity-0 group-hover:opacity-100 text-sm font-mono font-normal text-slate-500">✏️ Edit</span>
+                    </h2>
+                  )}
+                </div>
+                
+                <div className="text-right">
+                   <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">{selectedDetail.budget_type}</p>
+                   <p className="text-2xl font-bold text-green-700 dark:text-green-400">{selectedDetail.estimated_budget}</p>
+                </div>
+              </div>
+
+              {/* Date Range Display */}
               {selectedDetail.start_date && selectedDetail.end_date && (
-                <div className="flex items-center gap-4 mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">📅</span>
-                    <div><p className="text-sm font-bold">Periode Perjalanan</p><p className="text-xs text-slate-600 dark:text-slate-400">{new Date(selectedDetail.start_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })} - {new Date(selectedDetail.end_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
+                <div className="inline-flex items-center gap-3 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                  <span className="text-xl">📅</span>
+                  <div>
+                    <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase">Periode Perjalanan</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {new Date(selectedDetail.start_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {' - '}
+                      {new Date(selectedDetail.end_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </p>
                   </div>
-                  <div className="ml-auto text-right"><p className="text-sm font-bold">{selectedDetail.days} Hari</p><p className="text-xs text-slate-500">{selectedDetail.budget_type?.toUpperCase()}</p></div>
                 </div>
               )}
             </div>
-            <div className="space-y-6">
-              {selectedDetail.itinerary_data.days?.map((dayPlan) => (
-                <div key={dayPlan.day} className="p-6 bg-white/50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center justify-between mb-4"><h3 className="font-serif text-xl font-bold">Hari {dayPlan.day}</h3></div>
-                  <div className="space-y-3">
-                    {dayPlan.slots?.map((slot, idx) => (
-                      <div key={idx} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center justify-between"><span className="font-mono text-xs font-bold bg-slate-200 dark:bg-slate-700 px-3 py-1 rounded-full">{slot.time_slot}</span><span className="font-mono text-sm font-bold">{slot.title}</span></div>
-                      </div>
-                    ))}
+
+            {/* Itinerary Days Loop */}
+            <div className="space-y-8">
+              {editableDays.map((dayPlan, dayIndex) => {
+                const weather = getWeatherForDay(dayIndex);
+                
+                return (
+                  <div key={dayPlan.day} className="relative pl-8 md:pl-12 border-l-2 border-dashed border-slate-300 dark:border-slate-700 last:border-0 pb-8 last:pb-0">
+                    
+                    {/* Day Marker */}
+                    <div className="absolute -left-[14px] top-0 w-7 h-7 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-full flex items-center justify-center font-bold text-xs text-slate-500 z-10">
+                      {dayPlan.day}
+                    </div>
+
+                    {/* Day Header & Weather */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <h3 className="font-serif text-xl font-bold text-slate-900 dark:text-white">Hari {dayPlan.day}</h3>
+                      
+                      {/* ✅ Weather Widget Per Hari */}
+                      {weather ? (
+                        <div className="flex items-center gap-3 mt-2 sm:mt-0 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                          <img src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`} alt={weather.description} className="w-8 h-8" />
+                          <div className="text-left">
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">{weather.temp}°C</p>
+                            <p className="text-[10px] text-slate-500 capitalize">{weather.description}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 italic">Cuaca tidak tersedia</div>
+                      )}
+                    </div>
+
+                    {/* Slots List */}
+                    <div className="space-y-3">
+                      {dayPlan.slots.map((slot, slotIndex) => (
+                        <div key={slotIndex} className="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
+                          
+                          <div className="flex items-center gap-4 flex-1">
+                            {/* Time Badge */}
+                            <div className="flex-shrink-0 w-16 text-center">
+                              <span className="block text-lg font-bold text-slate-900 dark:text-white font-mono">{slot.time_slot}</span>
+                            </div>
+                            
+                            {/* Destination Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-slate-900 dark:text-white truncate">{slot.title}</p>
+                              {slot.notes && <p className="text-xs text-slate-500 italic truncate">{slot.notes}</p>}
+                            </div>
+                          </div>
+
+                          {/* Actions: Reorder & Delete */}
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
+                            <button 
+                              onClick={() => moveSlot(dayIndex, slotIndex, 'up')}
+                              disabled={slotIndex === 0}
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Pindah Atas"
+                            >
+                              ↑
+                            </button>
+                            <button 
+                              onClick={() => moveSlot(dayIndex, slotIndex, 'down')}
+                              disabled={slotIndex === dayPlan.slots.length - 1}
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Pindah Bawah"
+                            >
+                              ↓
+                            </button>
+                            <button 
+                              onClick={() => deleteSlot(dayIndex, slotIndex)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+                              title="Hapus Destinasi"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {dayPlan.slots.length === 0 && (
+                        <p className="text-center text-sm text-slate-400 italic py-4">Belum ada destinasi untuk hari ini.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* ✅ Destination Picker Modal (Untuk Manual Mode) */}
+      {/* ✅ Destination Picker Modal */}
       {showDestinationPicker && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDestinationPicker(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -567,8 +832,6 @@ export default function ItineraryPage() {
               <h3 className="text-lg font-bold">Pilih Destinasi</h3>
               <button onClick={() => setShowDestinationPicker(false)} className="text-slate-500 hover:text-slate-700">✕</button>
             </div>
-            
-            {/* Wishlist Section */}
             <div className="mb-6">
               <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">❤️ Wishlist Saya</h4>
               <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -581,8 +844,6 @@ export default function ItineraryPage() {
                 {wishlistItems.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Wishlist kosong</p>}
               </div>
             </div>
-
-            {/* Search Database Section */}
             <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
               <h4 className="font-bold text-sm mb-3">🔍 Cari dari Database</h4>
               <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); searchDestinations(e.target.value); }} placeholder="Cari destinasi..." className="w-full p-3 border rounded-xl mb-3" />
@@ -598,6 +859,108 @@ export default function ItineraryPage() {
           </div>
         </div>
       )}
+
+{/* ✅ MANUAL SCHEDULER MODAL - Dengan Time Picker */}
+{showScheduler && (
+  <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowScheduler(false)}>
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-2xl font-bold">📅 Atur Jadwal Manual</h3>
+          <p className="text-sm text-slate-500 mt-1">Tempatkan destinasi ke hari dan jam yang diinginkan</p>
+        </div>
+        <button onClick={() => setShowScheduler(false)} className="text-slate-500 hover:text-slate-700 text-2xl">✕</button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* List Destinasi */}
+        <div>
+          <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">📋 Destinasi Tersedia</h4>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {manualDestinations.map((dest, idx) => (
+              <div key={dest.id} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="flex items-start gap-2 mb-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold flex-shrink-0">{idx + 1}</span>
+                  <div className="flex-1">
+                    <p className="font-bold text-sm">{dest.title}</p>
+                    <p className="text-xs text-slate-500">{dest.category}</p>
+                  </div>
+                </div>
+                
+                {/* Dropdown untuk pilih hari */}
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <select
+                    value={dest.assigned_day || ''}
+                    onChange={(e) => updateDestinationSchedule(dest.id, parseInt(e.target.value) || 0, dest.assigned_time || '08:00')}
+                    className="p-2 text-xs border rounded-lg bg-white dark:bg-slate-700"
+                  >
+                    <option value="">Pilih Hari</option>
+                    {Array.from({ length: calculateDays() }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>Hari {i + 1}</option>
+                    ))}
+                  </select>
+                  
+                  {/* ✅ TIME PICKER (Jam) */}
+                  <input
+                    type="time"
+                    value={dest.assigned_time || '08:00'}
+                    onChange={(e) => updateDestinationSchedule(dest.id, dest.assigned_day || 1, e.target.value)}
+                    className="p-2 text-xs border rounded-lg bg-white dark:bg-slate-700"
+                  />
+                </div>
+                
+                {dest.assigned_day && dest.assigned_time && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded">
+                      Hari {dest.assigned_day} - {dest.assigned_time}
+                    </span>
+                    <button onClick={() => clearDestinationSchedule(dest.id)} className="text-xs text-red-500 hover:text-red-700">Clear</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Preview per Hari */}
+        <div>
+          <h4 className="font-bold text-sm mb-3 text-green-600 dark:text-green-400">📅 Preview Jadwal</h4>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {Array.from({ length: calculateDays() }, (_, i) => {
+              const dayNum = i + 1;
+              const dayDestinations = manualDestinations
+                .filter(d => d.assigned_day === dayNum)
+                .sort((a, b) => (a.assigned_time || '').localeCompare(b.assigned_time || ''));
+              
+              return (
+                <div key={dayNum} className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                  <h5 className="font-bold text-sm mb-2 text-green-700 dark:text-green-400">Hari {dayNum}</h5>
+                  {dayDestinations.length === 0 ? (
+                    <p className="text-xs text-green-600 dark:text-green-400 italic">Belum ada destinasi</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {dayDestinations.map((dest) => (
+                        <li key={dest.id} className="text-xs flex items-center gap-2">
+                          <span className="text-green-600 dark:text-green-400 font-bold font-mono">{dest.assigned_time}:</span>
+                          <span className="text-slate-700 dark:text-slate-300">{dest.title}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 flex gap-3">
+        <button onClick={() => setShowScheduler(false)} className="flex-1 px-4 py-3 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-mono text-xs font-bold rounded-xl uppercase">Tutup</button>
+        <button onClick={handleManualGenerate} className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-mono text-xs font-bold rounded-xl uppercase">Generate Itinerary</button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
