@@ -103,3 +103,45 @@ export function formatDate(timestamp: number): string {
     month: 'short',
   });
 }
+
+export async function fetchItineraryWeather(startDate: string, days: number) {
+  const apiKey = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+  if (!apiKey) throw new Error("API Key cuaca tidak ditemukan di .env.local");
+
+  // OpenWeather 5-day forecast (Yogyakarta)
+  const url = `https://api.openweathermap.org/data/2.5/forecast?lat=-7.7956&lon=110.3695&appid=${apiKey}&units=metric&lang=id`;
+  
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Gagal fetch cuaca");
+  
+  const data = await res.json();
+  
+  // Kelompokkan per tanggal (YYYY-MM-DD)
+  const dailyMap: Record<string, any> = {};
+  data.list.forEach((item: any) => {
+    const dateStr = item.dt_txt.split(' ')[0];
+    if (!dailyMap[dateStr]) {
+      dailyMap[dateStr] = {
+        date: dateStr,
+        temp: Math.round(item.main.temp),
+        description: item.weather[0].description,
+        icon: item.weather[0].icon,
+        humidity: item.main.humidity,
+        wind_speed: item.wind.speed
+      };
+    }
+  });
+
+  // Sesuaikan dengan jumlah hari itinerary
+  const start = new Date(startDate);
+  const forecast = [];
+  
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split('T')[0];
+    forecast.push(dailyMap[dateStr] || null);
+  }
+  
+  return forecast; // Array index 0 = Hari 1, index 1 = Hari 2, dst
+}

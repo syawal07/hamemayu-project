@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { fetchAPI } from '../../lib/api';
+import { fetchItineraryWeather } from '../../lib/weather'; 
 
 interface Category {
   id: number;
@@ -106,7 +107,8 @@ export default function ItineraryPage() {
   const [editableDays, setEditableDays] = useState<ItineraryDay[] | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [weatherForecast, setWeatherForecast] = useState<any[]>([]);
+  //const [weatherForecast, setWeatherForecast] = useState<any[]>([]);
+  const [weatherForecast, setWeatherForecast] = useState<{[key: string]: any} | any[]>({});
   
   // ✅ STATE UNTUK EDIT SLOT DARI WISHLIST
   const [showEditSlotModal, setShowEditSlotModal] = useState(false);
@@ -410,16 +412,13 @@ const handleManualGenerate = async () => {
       setEditableDays(JSON.parse(JSON.stringify(res.itinerary_data.days)));
       setNewTitle(res.title);
       
-      // Fetch weather dengan fallback
+      // ✅ FETCH CUACA LANGSUNG DARI FRONTEND
       if (res.start_date && res.end_date) {
         try {
-          const weatherRes = await fetchAPI(`/itinerary/weather?start_date=${res.start_date}&end_date=${res.end_date}&location=Yogyakarta`, { requireAuth: true });
-          if (weatherRes && weatherRes.data && weatherRes.data.length > 0) {
-            setWeatherForecast(weatherRes.data);
-          } else {
-            setWeatherForecast([]);
-          }
-        } catch (err) { 
+          const daysCount = res.days || calculateDays();
+          const weatherData = await fetchItineraryWeather(res.start_date, daysCount);
+          setWeatherForecast(weatherData); // Sekarang array yang match per hari
+        } catch (err) {
           console.warn("Weather fetch failed", err);
           setWeatherForecast([]);
         }
@@ -432,6 +431,7 @@ const handleManualGenerate = async () => {
       setDetailLoading(false);
     }
   };
+
 
   const handleUpdateDetail = async (updatedData: any) => {
     if (!selectedDetail) return;
@@ -495,9 +495,11 @@ const handleManualGenerate = async () => {
     handleUpdateDetail({ itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } });
   };
 
-  const getWeatherForDay = (dayIndex: number) => {
-    return weatherForecast[dayIndex] || null;
-  };
+// ✅ GET WEATHER FOR SPECIFIC DAY (berdasarkan tanggal, bukan index)
+const getWeatherForDay = (dayIndex: number) => {
+  // weatherForecast sekarang array: [Hari1, Hari2, Hari3...]
+  return Array.isArray(weatherForecast) ? weatherForecast[dayIndex] || null : null;
+};
 
   // ✅ FUNCTION UNTUK EDIT SLOT DARI WISHLIST
   const openEditSlotModal = async (dayIndex: number, slotIndex: number) => {

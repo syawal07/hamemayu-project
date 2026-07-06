@@ -214,7 +214,6 @@ class ItineraryController extends Controller
         }
     }
 
-    // ✅ Method untuk fetch weather forecast (dummy data untuk testing)
     public function getWeatherForecast(Request $request)
     {
         $request->validate([
@@ -227,23 +226,118 @@ class ItineraryController extends Controller
         $endDate = \Carbon\Carbon::parse($request->end_date);
         $days = $startDate->diffInDays($endDate) + 1;
         
-        // TODO: Integrasi dengan OpenWeatherMap API nanti
-        // For now, return dummy data untuk testing frontend
         $weatherData = [];
-        $weatherIcons = ['01d', '02d', '03d', '04d', '10d', '09d'];
-        $descriptions = ['Cerah', 'Berawan', 'Mendung', 'Hujan Ringan', 'Hujan', 'Petir'];
+        $apiKey = env('OPENWEATHER_API_KEY');
         
-        for ($i = 0; $i < $days; $i++) {
-            $date = $startDate->copy()->addDays($i);
-            $weatherData[] = [
-                'date' => $date->format('Y-m-d'),
-                'day_name' => $date->isoFormat('dddd'),
-                'temp' => rand(24, 32),
-                'description' => $descriptions[array_rand($descriptions)],
-                'icon' => $weatherIcons[array_rand($weatherIcons)],
-                'humidity' => rand(60, 90),
-                'wind_speed' => rand(2, 8),
-            ];
+        // Kalau API key nggak ada, return dummy data
+        if (!$apiKey) {
+            \Log::warning('OPENWEATHER_API_KEY not set!');
+            for ($i = 0; $i < $days; $i++) {
+                $currentDate = $startDate->copy()->addDays($i);
+                $weatherData[] = [
+                    'date' => $currentDate->format('Y-m-d'),
+                    'day_name' => $currentDate->isoFormat('dddd'),
+                    'temp' => rand(26, 32),
+                    'description' => 'Berawan',
+                    'icon' => '02d',
+                    'humidity' => 75,
+                    'wind_speed' => 5,
+                ];
+            }
+            return response()->json(['success' => true, 'data' => $weatherData]);
+        }
+        
+        // Call OpenWeatherMap 5-day forecast API
+        try {
+            $lat = -7.7956; // Yogyakarta
+            $lon = 110.3695;
+            
+            $response = Http::get("https://api.openweathermap.org/data/2.5/forecast", [
+                'lat' => $lat,
+                'lon' => $lon,
+                'appid' => $apiKey,
+                'units' => 'metric',
+                'lang' => 'id'
+            ]);
+            
+            if ($response->successful()) {
+                $apiData = $response->json();
+                $listData = $apiData['list'] ?? [];
+                
+                // Group API data by date (YYYY-MM-DD)
+                $dailyMap = [];
+                foreach ($listData as $item) {
+                    $date = \Carbon\Carbon::parse($item['dt_txt'])->format('Y-m-d');
+                    if (!isset($dailyMap[$date])) {
+                        $dailyMap[$date] = [];
+                    }
+                    $dailyMap[$date][] = $item;
+                }
+                
+                // Build response for EACH day in itinerary
+                for ($i = 0; $i < $days; $i++) {
+                    $currentDate = $startDate->copy()->addDays($i);
+                    $dateStr = $currentDate->format('Y-m-d');
+                    
+                    if (isset($dailyMap[$dateStr]) && count($dailyMap[$dateStr]) > 0) {
+                        // Ambil data sekitar tengah hari (index 4 = ~12:00)
+                        $samples = $dailyMap[$dateStr];
+                        $middayIndex = min(4, count($samples) - 1);
+                        $dayData = $samples[$middayIndex];
+                        
+                        $weatherData[] = [
+                            'date' => $dateStr,
+                            'day_name' => $currentDate->isoFormat('dddd'),
+                            'temp' => round($dayData['main']['temp']),
+                            'description' => $dayData['weather'][0]['description'],
+                            'icon' => $dayData['weather'][0]['icon'],
+                            'humidity' => $dayData['main']['humidity'],
+                            'wind_speed' => $dayData['wind']['speed'],
+                        ];
+                    } else {
+                        // Data nggak tersedia untuk tanggal ini
+                        $weatherData[] = [
+                            'date' => $dateStr,
+                            'day_name' => $currentDate->isoFormat('dddd'),
+                            'temp' => null,
+                            'description' => null,
+                            'icon' => null,
+                            'humidity' => null,
+                            'wind_speed' => null,
+                        ];
+                    }
+                }
+            } else {
+                \Log::error('Weather API failed: ' . $response->status());
+                // Return dummy data on API error
+                for ($i = 0; $i < $days; $i++) {
+                    $currentDate = $startDate->copy()->addDays($i);
+                    $weatherData[] = [
+                        'date' => $currentDate->format('Y-m-d'),
+                        'day_name' => $currentDate->isoFormat('dddd'),
+                        'temp' => rand(26, 32),
+                        'description' => 'Berawan',
+                        'icon' => '02d',
+                        'humidity' => 75,
+                        'wind_speed' => 5,
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Weather API Exception: ' . $e->getMessage());
+            // Return dummy data on exception
+            for ($i = 0; $i < $days; $i++) {
+                $currentDate = $startDate->copy()->addDays($i);
+                $weatherData[] = [
+                    'date' => $currentDate->format('Y-m-d'),
+                    'day_name' => $currentDate->isoFormat('dddd'),
+                    'temp' => rand(26, 32),
+                    'description' => 'Berawan',
+                    'icon' => '02d',
+                    'humidity' => 75,
+                    'wind_speed' => 5,
+                ];
+            }
         }
         
         return response()->json([
