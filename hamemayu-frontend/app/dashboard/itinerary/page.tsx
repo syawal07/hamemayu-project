@@ -689,6 +689,49 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
     alert("Destinasi berhasil diganti!");
   };
 
+// ✅ State untuk multi-select sementara di modal
+const [tempSelectedIds, setTempSelectedIds] = useState<Set<number>>(new Set());
+
+// ✅ Toggle centang destinasi
+const toggleTempSelect = (id: number) => {
+  setTempSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+};
+
+// ✅ Tambahkan semua yang dicentang sekaligus
+const addSelectedDestinations = () => {
+  const allItems = [...wishlistItems, ...searchResults];
+  const itemsToAdd = allItems
+    .filter(item => {
+      const contentId = item.content?.id || item.id;
+      return tempSelectedIds.has(contentId);
+    })
+    .map(item => {
+      const content = item.content || item;
+      return {
+        id: content.id,
+        title: content.title,
+        content_id: content.id,
+        category: content.category?.name || 'Umum',
+        assigned_day: undefined,
+        assigned_time: undefined,
+      };
+    });
+
+  // Filter duplikat
+  const existingIds = new Set(manualDestinations.map(d => d.id));
+  const uniqueNew = itemsToAdd.filter(d => !existingIds.has(d.id));
+
+  setManualDestinations(prev => [...prev, ...uniqueNew]);
+  setTempSelectedIds(new Set()); // Reset centang
+  setShowDestinationPicker(false); // Tutup modal
+};
+
+
+
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12">
       <div className="mb-8">
@@ -1131,40 +1174,74 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
 )}
 
       {/* Destination Picker Modal */}
-      {showDestinationPicker && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDestinationPicker(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Pilih Destinasi</h3>
-              <button onClick={() => setShowDestinationPicker(false)} className="text-slate-500 hover:text-slate-700">✕</button>
-            </div>
-            <div className="mb-6">
-              <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">Wishlist Saya</h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {wishlistItems.map((item: any) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                    <div><p className="font-bold text-sm">{item.content?.title}</p><p className="text-xs text-slate-500">{item.content?.category?.name}</p></div>
-                    <button onClick={() => addDestinationToManual(item.content)} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg">+ Pilih</button>
+{/* ✅ Destination Picker Modal - MULTI SELECT */}
+{showDestinationPicker && (
+  <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDestinationPicker(false)}>
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">Pilih Destinasi</h3>
+        <button onClick={() => setShowDestinationPicker(false)} className="text-slate-500 hover:text-slate-700">✕</button>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+        {/* Wishlist Section */}
+        <div>
+          <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">❤️ Wishlist Saya</h4>
+          <div className="space-y-2">
+            {wishlistItems.map((item: any) => {
+              const id = item.content?.id;
+              const isSelected = tempSelectedIds.has(id);
+              return (
+                <div key={id} onClick={() => toggleTempSelect(id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+                  <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 accent-blue-600" />
+                  <div className="flex-1">
+                    <p className="font-bold text-sm">{item.content?.title}</p>
+                    <p className="text-xs text-slate-500">Destinasi</p>
                   </div>
-                ))}
-                {wishlistItems.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Wishlist kosong</p>}
-              </div>
-            </div>
-            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-              <h4 className="font-bold text-sm mb-3">Cari Destinasi</h4>
-              <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); searchDestinations(e.target.value); }} placeholder="Cari destinasi..." className="w-full p-3 border rounded-xl mb-3" />
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {searchResults.map((dest: any) => (
-                  <div key={dest.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                    <div><p className="font-bold text-sm">{dest.title}</p><p className="text-xs text-slate-500">{dest.category?.name}</p></div>
-                    <button onClick={() => addDestinationToManual(dest)} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg">+ Pilih</button>
-                  </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              );
+            })}
+            {wishlistItems.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Wishlist kosong</p>}
           </div>
         </div>
-      )}
+
+        {/* Search Section */}
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+          <h4 className="font-bold text-sm mb-3">🔍 Cari dari Database</h4>
+          <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); searchDestinations(e.target.value); }} placeholder="Cari destinasi..." className="w-full p-3 border rounded-xl mb-3 bg-white dark:bg-slate-800" />
+          <div className="space-y-2">
+            {searchResults.map((dest: any) => {
+              const isSelected = tempSelectedIds.has(dest.id);
+              return (
+                <div key={dest.id} onClick={() => toggleTempSelect(dest.id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+                  <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 accent-blue-600" />
+                  <div className="flex-1">
+                    <p className="font-bold text-sm">{dest.title}</p>
+                    <p className="text-xs text-slate-500">{dest.category?.name}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Action */}
+      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+        <p className="text-sm text-slate-500">
+          {tempSelectedIds.size > 0 ? `✅ ${tempSelectedIds.size} destinasi dipilih` : 'Centang destinasi untuk menambahkan'}
+        </p>
+        <button 
+          onClick={addSelectedDestinations} 
+          disabled={tempSelectedIds.size === 0}
+          className="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-mono text-xs font-bold rounded-xl uppercase transition-all"
+        >
+          + TAMBAHKAN
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* MANUAL SCHEDULER MODAL */}
       {showScheduler && (
