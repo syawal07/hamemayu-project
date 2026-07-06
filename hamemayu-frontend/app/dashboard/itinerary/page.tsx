@@ -395,9 +395,57 @@ export default function ItineraryPage() {
       }
   
       setSelectedDetail(res);
-      setEditableDays(JSON.parse(JSON.stringify(res.itinerary_data.days)));
+      
+      // ✅ NORMALISASI DATA: Bersihin format AI jadi kayak manual
+      const normalizedDays = res.itinerary_data.days.map((day: ItineraryDay) => ({
+        ...day,
+        slots: day.slots.map(slot => {
+          const rawTitle = slot.title || '';
+          
+          // Kalau format sederhana, langsung return
+          if (!rawTitle.includes('\n') && !rawTitle.includes('(')) {
+            return slot;
+          }
+          
+          // ✅ Parse format AI yang kompleks
+          const lines = rawTitle.split('\n').map(l => l.trim()).filter(l => l);
+          let extractedTitle = '';
+          let extractedTime = slot.time_slot || '';
+          
+          for (const line of lines) {
+            // Cari waktu (HH:MM - HH:MM)
+            const timeMatch = line.match(/\((\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\)/);
+            if (timeMatch) {
+              extractedTime = timeMatch[1];
+              continue;
+            }
+            // Skip kategori ALL CAPS
+            if (line.match(/^[A-Z\s&]+$/) && line.length < 30) continue;
+            // Skip baris waktu doang
+            if (line.match(/^\d{1,2}:\d{2}$/)) continue;
+            // Ambil judul
+            if (line.length > 2 && !extractedTitle) {
+              extractedTitle = line;
+            }
+          }
+          
+          // Fallback
+          if (!extractedTitle && lines.length > 0) {
+            extractedTitle = lines[lines.length - 1];
+          }
+          
+          return {
+            ...slot,
+            title: extractedTitle || rawTitle,
+            time_slot: extractedTime
+          };
+        })
+      }));
+      
+      setEditableDays(JSON.parse(JSON.stringify(normalizedDays)));
       setNewTitle(res.title);
       
+      // Fetch weather
       if (res.start_date && res.end_date) {
         try {
           const daysCount = res.days || calculateDays();
@@ -958,74 +1006,105 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
                 )}
               </div>
 
-              {/* Slots List */}
-              <div className="space-y-3">
-                {dayPlan.slots.map((slot, slotIndex) => (
-                  <div key={slotIndex} className="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
-                    
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="flex-shrink-0 w-16 text-center">
-                        <span className="block text-lg font-bold text-slate-900 dark:text-white font-mono">{slot.time_slot}</span>
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-slate-900 dark:text-white truncate">{slot.title}</p>
-                        {slot.notes && <p className="text-xs text-slate-500 italic truncate">{slot.notes}</p>}
-                      </div>
-                    </div>
+{/* Slots List - FIX: EKSTRAK WAKTU DARI time_slot */}
+<div className="space-y-3">
+  {dayPlan.slots.map((slot, slotIndex) => {
+    // ✅ Ekstrak waktu dari time_slot yang formatnya "KATEGORI (HH:MM - HH:MM)"
+    const extractTime = (timeSlot: string) => {
+      if (!timeSlot) return '00:00';
+      
+      // Cari pola (HH:MM - HH:MM)
+      const timeMatch = timeSlot.match(/\((\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\)/);
+      if (timeMatch) {
+        return timeMatch[1]; // Return waktu mulai
+      }
+      
+      // Kalau nggak ada pola waktu, coba ambil angka pertama yang mirip waktu
+      const simpleTime = timeSlot.match(/(\d{1,2}:\d{2})/);
+      if (simpleTime) {
+        return simpleTime[1];
+      }
+      
+      return timeSlot; // Fallback
+    };
+    
+    const displayTime = extractTime(slot.time_slot || '');
+    const displayTitle = slot.title || 'No Title';
+    
+    return (
+      <div key={slotIndex} className="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
+        
+        <div className="flex items-center gap-4 flex-1">
+          {/* Time Badge */}
+          <div className="flex-shrink-0 w-16 text-center">
+            <span className="block text-lg font-bold text-slate-900 dark:text-white font-mono">
+              {displayTime}
+            </span>
+          </div>
+          
+          {/* Destination Info */}
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-slate-900 dark:text-white truncate">
+              {displayTitle}
+            </p>
+            {slot.notes && <p className="text-xs text-slate-500 italic truncate">{slot.notes}</p>}
+          </div>
+        </div>
 
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
-                      <button 
-                        onClick={() => navigateSingleToMap(slot)}
-                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-all"
-                        title="Lihat di Peta"
-                        type="button"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </button>
-                      
-                      <button 
-                        onClick={() => openEditSlotModal(dayIndex, slotIndex)}
-                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg"
-                        title="Ganti dari Wishlist"
-                      >
-                        ✏️
-                      </button>
-                      
-                      <button 
-                        onClick={() => moveSlot(dayIndex, slotIndex, 'up')}
-                        disabled={slotIndex === 0}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Pindah Atas"
-                      >
-                        ↑
-                      </button>
-                      <button 
-                        onClick={() => moveSlot(dayIndex, slotIndex, 'down')}
-                        disabled={slotIndex === dayPlan.slots.length - 1}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Pindah Bawah"
-                      >
-                        ↓
-                      </button>
-                      <button 
-                        onClick={() => deleteSlot(dayIndex, slotIndex)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
-                        title="Hapus Destinasi"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                
-                {dayPlan.slots.length === 0 && (
-                  <p className="text-center text-sm text-slate-400 italic py-4">Belum ada destinasi untuk hari ini.</p>
-                )}
-              </div>
+        {/* Actions Buttons */}
+        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
+          <button 
+            onClick={() => navigateSingleToMap(slot)}
+            className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-all"
+            title="Lihat di Peta"
+            type="button"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          
+          <button 
+            onClick={() => openEditSlotModal(dayIndex, slotIndex)}
+            className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg"
+            title="Ganti dari Wishlist"
+          >
+            ✏️
+          </button>
+          
+          <button 
+            onClick={() => moveSlot(dayIndex, slotIndex, 'up')}
+            disabled={slotIndex === 0}
+            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Pindah Atas"
+          >
+            ↑
+          </button>
+          <button 
+            onClick={() => moveSlot(dayIndex, slotIndex, 'down')}
+            disabled={slotIndex === dayPlan.slots.length - 1}
+            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Pindah Bawah"
+          >
+            ↓
+          </button>
+          <button 
+            onClick={() => deleteSlot(dayIndex, slotIndex)}
+            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+            title="Hapus Destinasi"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+    );
+  })}
+  
+  {dayPlan.slots.length === 0 && (
+    <p className="text-center text-sm text-slate-400 italic py-4">Belum ada destinasi untuk hari ini.</p>
+  )}
+</div>
             </div>
           );
         })}
@@ -1188,21 +1267,66 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
                   
                   {/* Tombol-tombol di kanan */}
                   <div className="flex gap-2">
-                    {/* TOMBOL NAVIGASI - TAMBAH INI */}
+                    {/* ✅ TOMBOL NAVIGASI - DENGAN LOGIC MATCHING YANG DIPERBAIKI */}
                     <button
                       onClick={async (e) => {
                         e.stopPropagation(); // Jangan trigger replaceSlotFromWishlist
+                        
                         // Navigasi ke destinasi ini
-                        if (item.content?.latitude && item.content?.longitude) {
-                          const destination = {
-                            lat: item.content.latitude,
-                            lng: item.content.longitude,
-                            title: item.content?.title || item.title,
-                          };
-                          const routeParam = encodeURIComponent(JSON.stringify([destination]));
-                          window.open(`/dashboard/peta?route=${routeParam}`, '_blank');
-                        } else {
-                          alert("Koordinat destinasi belum tersedia");
+                        const title = item.content?.title || item.title;
+                        
+                        try {
+                          // Fetch markers
+                          const markers: any[] = await fetchAPI('/map-markers');
+                          
+                          if (!Array.isArray(markers)) {
+                            alert("Gagal memuat data peta.");
+                            return;
+                          }
+
+                          let matchedMarker = null;
+
+                          // PRIORITAS 1: Match by content.id
+                          if (item.content?.id) {
+                            matchedMarker = markers.find(m => m.id === item.content.id);
+                          }
+
+                          // PRIORITAS 2: Fallback - Match by title
+                          if (!matchedMarker && title) {
+                            const searchTitle = title.toLowerCase().trim();
+                            matchedMarker = markers.find(marker => {
+                              const markerTitle = marker.title.toLowerCase().trim();
+                              return markerTitle === searchTitle || 
+                                    markerTitle.includes(searchTitle) || 
+                                    searchTitle.includes(markerTitle);
+                            });
+                          }
+
+                          if (!matchedMarker) {
+                            alert(`Destinasi "${title}" tidak ditemukan di database peta.`);
+                            return;
+                          }
+
+                          // Parse koordinat
+                          const lat = typeof matchedMarker.lat === 'string' ? parseFloat(matchedMarker.lat) : matchedMarker.lat;
+                          const lng = typeof matchedMarker.lng === 'string' ? parseFloat(matchedMarker.lng) : matchedMarker.lng;
+
+                          if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                            const destination = {
+                              lat: lat,
+                              lng: lng,
+                              title: matchedMarker.title || title,
+                              content_id: matchedMarker.id,
+                            };
+                            
+                            const routeParam = encodeURIComponent(JSON.stringify([destination]));
+                            window.location.href = `/dashboard/peta?route=${routeParam}`;
+                          } else {
+                            alert(`Koordinat "${title}" belum tersedia di database.`);
+                          }
+                        } catch (err: any) {
+                          console.error("Navigation error:", err);
+                          alert(`Gagal membuka peta: ${err.message || 'Unknown error'}`);
                         }
                       }}
                       className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
