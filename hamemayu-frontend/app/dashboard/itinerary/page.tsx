@@ -95,7 +95,6 @@ export default function ItineraryPage() {
   const [selectedDetail, setSelectedDetail] = useState<ItineraryDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // ✅ STATE BARU UNTUK MANUAL MODE YANG FLEKSIBEL
   const [manualDestinations, setManualDestinations] = useState<ManualDestination[]>([]);
   const [wishlistItems, setWishlistItems] = useState<any[]>([]);
   const [showDestinationPicker, setShowDestinationPicker] = useState(false);
@@ -103,14 +102,11 @@ export default function ItineraryPage() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showScheduler, setShowScheduler] = useState(false);
   
-  // ✅ STATE UNTUK EDIT DETAIL
   const [editableDays, setEditableDays] = useState<ItineraryDay[] | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  //const [weatherForecast, setWeatherForecast] = useState<any[]>([]);
   const [weatherForecast, setWeatherForecast] = useState<{[key: string]: any} | any[]>({});
   
-  // ✅ STATE UNTUK EDIT SLOT DARI WISHLIST
   const [showEditSlotModal, setShowEditSlotModal] = useState(false);
   const [editingSlot, setEditingSlot] = useState<{dayIndex: number, slotIndex: number} | null>(null);
   const [wishlistForEdit, setWishlistForEdit] = useState<any[]>([]);
@@ -208,83 +204,73 @@ export default function ItineraryPage() {
     ));
   };
 
-  const swapDestinations = (index1: number, index2: number) => {
-    const newDestinations = [...manualDestinations];
-    [newDestinations[index1], newDestinations[index2]] = [newDestinations[index2], newDestinations[index1]];
-    setManualDestinations(newDestinations);
-  };
-//////////////////////////////////////////////////////
-const handleManualGenerate = async () => {
-  if (manualDestinations.length === 0) { alert('PILIH MINIMAL 1 DESTINASI DULU!'); return; }
-  if (!startDate || !endDate) { alert('PILIH TANGGAL MULAI DAN SELESAI!'); return; }
+  const handleManualGenerate = async () => {
+    if (manualDestinations.length === 0) { alert('PILIH MINIMAL 1 DESTINASI DULU!'); return; }
+    if (!startDate || !endDate) { alert('PILIH TANGGAL MULAI DAN SELESAI!'); return; }
 
-  setIsGenerating(true);
-  try {
-    const days = calculateDays();
-    const daysArray = [];
-    
-    for (let dayNum = 1; dayNum <= days; dayNum++) {
-      const dayDestinations = manualDestinations.filter(d => d.assigned_day === dayNum);
-      daysArray.push({
-        day: dayNum,
-        theme: `Hari ${dayNum}`,
-        slots: dayDestinations.map((dest, idx) => ({
-          content_id: dest.content_id,
-          title: dest.title,
-          time_slot: dest.assigned_time || ['pagi', 'siang', 'sore'][idx % 3],
-        })),
-      });
-    }
-    
-    const unassigned = manualDestinations.filter(d => !d.assigned_day);
-    if (unassigned.length > 0 && daysArray.length > 0) {
-      unassigned.forEach((dest, idx) => {
-        daysArray[0].slots.push({
-          content_id: dest.content_id,
-          title: dest.title,
-          time_slot: ['pagi', 'siang', 'sore'][idx % 3],
+    setIsGenerating(true);
+    try {
+      const days = calculateDays();
+      const daysArray = [];
+      
+      for (let dayNum = 1; dayNum <= days; dayNum++) {
+        const dayDestinations = manualDestinations.filter(d => d.assigned_day === dayNum);
+        daysArray.push({
+          day: dayNum,
+          theme: `Hari ${dayNum}`,
+          slots: dayDestinations.map((dest, idx) => ({
+            content_id: dest.content_id,
+            title: dest.title,
+            time_slot: dest.assigned_time || ['pagi', 'siang', 'sore'][idx % 3],
+          })),
         });
+      }
+      
+      const unassigned = manualDestinations.filter(d => !d.assigned_day);
+      if (unassigned.length > 0 && daysArray.length > 0) {
+        unassigned.forEach((dest, idx) => {
+          daysArray[0].slots.push({
+            content_id: dest.content_id,
+            title: dest.title,
+            time_slot: ['pagi', 'siang', 'sore'][idx % 3],
+          });
+        });
+      }
+      
+      const budgetRanges = {
+        hemat: { min: 150000, max: 300000 },
+        normal: { min: 300000, max: 600000 },
+        mewah: { min: 600000, max: 1200000 },
+      };
+      
+      const budgetRange = budgetRanges[formBudget as keyof typeof budgetRanges] || budgetRanges.normal;
+      const totalDestinations = manualDestinations.length;
+      const minBudget = budgetRange.min * days;
+      const maxBudget = budgetRange.max * days;
+      
+      const formatRupiah = (amount: number) => {
+        return `Rp ${amount.toLocaleString('id-ID')}`;
+      };
+      
+      setGeneratedResult({
+        summary: {
+          total_days: days,
+          total_destinations: totalDestinations,
+          estimated_total_budget: `${formatRupiah(minBudget)} - ${formatRupiah(maxBudget)}`,
+          highlights: manualDestinations.map((d) => d.title),
+        },
+        days: daysArray,
       });
+      
+      setShowScheduler(false);
+    } catch (error) {
+      console.error('Manual generate error:', error);
+      alert('GAGAL GENERATE ITINERARY MANUAL');
+    } finally {
+      setIsGenerating(false);
     }
-    
-    // ✅ HITUNG ESTIMASI BUDGET BERDASARKAN formBudget
-    const budgetRanges = {
-      hemat: { min: 150000, max: 300000 },
-      normal: { min: 300000, max: 600000 },
-      mewah: { min: 600000, max: 1200000 },
-    };
-    
-    const budgetRange = budgetRanges[formBudget as keyof typeof budgetRanges] || budgetRanges.normal;
-    const totalDestinations = manualDestinations.length;
-    
-    // Hitung berdasarkan jumlah hari dan destinasi
-    const minBudget = budgetRange.min * days;
-    const maxBudget = budgetRange.max * days;
-    
-    // Format ke Rupiah
-    const formatRupiah = (amount: number) => {
-      return `Rp ${amount.toLocaleString('id-ID')}`;
-    };
-    
-    setGeneratedResult({
-      summary: {
-        total_days: days,
-        total_destinations: totalDestinations,
-        estimated_total_budget: `${formatRupiah(minBudget)} - ${formatRupiah(maxBudget)}`,
-        highlights: manualDestinations.map((d) => d.title),
-      },
-      days: daysArray,
-    });
-    
-    setShowScheduler(false);
-  } catch (error) {
-    console.error('Manual generate error:', error);
-    alert('GAGAL GENERATE ITINERARY MANUAL');
-  } finally {
-    setIsGenerating(false);
-  }
-};
-////////////////////
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!startDate || !endDate) { alert('MOHON PILIH TANGGAL MULAI DAN SELESAI'); return; }
@@ -412,12 +398,11 @@ const handleManualGenerate = async () => {
       setEditableDays(JSON.parse(JSON.stringify(res.itinerary_data.days)));
       setNewTitle(res.title);
       
-      // ✅ FETCH CUACA LANGSUNG DARI FRONTEND
       if (res.start_date && res.end_date) {
         try {
           const daysCount = res.days || calculateDays();
           const weatherData = await fetchItineraryWeather(res.start_date, daysCount);
-          setWeatherForecast(weatherData); // Sekarang array yang match per hari
+          setWeatherForecast(weatherData);
         } catch (err) {
           console.warn("Weather fetch failed", err);
           setWeatherForecast([]);
@@ -431,6 +416,102 @@ const handleManualGenerate = async () => {
       setDetailLoading(false);
     }
   };
+
+  // ✅ NAVIGASI SEMUA DESTINASI DI ITINERARY
+  const navigateAllToMap = async () => {
+    try {
+      if (!editableDays || editableDays.length === 0) {
+        alert("Tidak ada destinasi untuk dinavigasi.");
+        return;
+      }
+
+      const allSlots = editableDays.flatMap(day => day.slots);
+      
+      const destinations = await Promise.all(
+        allSlots.map(async (slot) => {
+          if (slot.content_id) {
+            try {
+              const res = await fetchAPI(`/contents/${slot.content_id}`);
+              if (res && res.data && res.data.latitude && res.data.longitude) {
+                return {
+                  lat: res.data.latitude,
+                  lng: res.data.longitude,
+                  title: slot.title,
+                };
+              }
+            } catch (err) {
+              console.error(`Failed to fetch coords for ${slot.title}:`, err);
+            }
+          }
+          return null;
+        })
+      );
+
+      const validDestinations = destinations.filter((d): d is {lat: number; lng: number; title: string} => d !== null);
+
+      if (validDestinations.length === 0) {
+        alert("Tidak ada destinasi dengan koordinat valid di itinerary ini.");
+        return;
+      }
+
+      const routeParam = encodeURIComponent(JSON.stringify(validDestinations));
+      window.open(`/dashboard/peta?route=${routeParam}`, '_blank');
+      
+    } catch (err) {
+      console.error("Navigation failed:", err);
+      alert("Gagal membuka peta navigasi.");
+    }
+  };
+
+// ✅ NAVIGASI SATU DESTINASI - FIX FIELD NAME (lat/lng)
+const navigateSingleToMap = async (slot: ItinerarySlot) => {
+  try {
+    console.log("📍 Navigasi slot:", slot);
+
+    if (!slot.content_id) {
+      alert(`⚠️ Destinasi "${slot.title}" belum memiliki data lokasi.`);
+      return;
+    }
+
+    // Fetch semua contents
+    const res = await fetchAPI('/contents?per_page=1000');
+    
+    if (!res || !Array.isArray(res)) {
+      alert(`❌ Gagal memuat data destinasi.`);
+      return;
+    }
+
+    // Cari content yang ID-nya match
+    const contentData = res.find((item: any) => item.id === slot.content_id);
+    
+    console.log("📥 Found content:", contentData);
+
+    if (!contentData) {
+      alert(`❌ Destinasi "${slot.title}" tidak ditemukan di database.`);
+      return;
+    }
+
+    // ✅ CEK FIELD YANG BENER: lat & lng (bukan latitude/longitude)
+    if (contentData.lat && contentData.lng) {
+      const destination = {
+        lat: parseFloat(contentData.lat),   // ✅ PAKAI .lat
+        lng: parseFloat(contentData.lng),   // ✅ PAKAI .lng
+        title: contentData.title || slot.title,
+      };
+      
+      console.log("🗺️ Opening peta dengan koordinat:", destination);
+      
+      // Buka peta internal dengan koordinat
+      const routeParam = encodeURIComponent(JSON.stringify([destination]));
+      window.open(`/dashboard/peta?route=${routeParam}`, '_blank');
+    } else {
+      alert(`⚠️ Koordinat "${slot.title}" belum tersedia di database.\n\nLat: ${contentData.lat}, Lng: ${contentData.lng}`);
+    }
+  } catch (err: any) {
+    console.error("Navigation error:", err);
+    alert(`❌ Gagal membuka peta navigasi\n\nError: ${err.message || 'Unknown error'}`);
+  }
+};
 
 
   const handleUpdateDetail = async (updatedData: any) => {
@@ -495,13 +576,10 @@ const handleManualGenerate = async () => {
     handleUpdateDetail({ itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } });
   };
 
-// ✅ GET WEATHER FOR SPECIFIC DAY (berdasarkan tanggal, bukan index)
-const getWeatherForDay = (dayIndex: number) => {
-  // weatherForecast sekarang array: [Hari1, Hari2, Hari3...]
-  return Array.isArray(weatherForecast) ? weatherForecast[dayIndex] || null : null;
-};
+  const getWeatherForDay = (dayIndex: number) => {
+    return Array.isArray(weatherForecast) ? weatherForecast[dayIndex] || null : null;
+  };
 
-  // ✅ FUNCTION UNTUK EDIT SLOT DARI WISHLIST
   const openEditSlotModal = async (dayIndex: number, slotIndex: number) => {
     setEditingSlot({ dayIndex, slotIndex });
     try {
@@ -736,196 +814,219 @@ const getWeatherForDay = (dayIndex: number) => {
         </div>
       )}
 
-      {/* ✅ DETAIL TAB - UPGRADED */}
-      {activeTab === 'detail' && selectedDetail && editableDays && (
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <button onClick={() => setActiveTab('list')} className="font-mono text-xs font-bold flex items-center gap-2 hover:text-green-700 transition-colors">
-              ← KEMBALI KE DAFTAR
-            </button>
-            
-            <button 
-              onClick={handleDeleteItinerary}
-              className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg font-mono text-xs font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              HAPUS ITINERARY
-            </button>
-          </div>
+{/* ✅ DETAIL TAB - LAYOUT DIPERBAIKI */}
+{activeTab === 'detail' && selectedDetail && editableDays && (
+  <div>
+    {/* Header dengan Tombol di Atas */}
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <button 
+        onClick={() => setActiveTab('list')} 
+        className="font-mono text-xs font-bold flex items-center gap-2 hover:text-green-700 transition-colors w-fit"
+      >
+        ← KEMBALI KE DAFTAR
+      </button>
+      
+      <div className="flex gap-3">
+        <button
+          onClick={navigateAllToMap}
+          className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-mono text-xs font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 3V4m0 0L9 7" />
+          </svg>
+          LIHAT DI PETA
+        </button>
+        
+        <button 
+          onClick={handleDeleteItinerary}
+          className="px-6 py-2.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-xl font-mono text-xs font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          HAPUS ITINERARY
+        </button>
+      </div>
+    </div>
 
-          <div className="bg-white/60 dark:bg-brutal-dark/60 rounded-3xl p-8 border border-white/60 dark:border-slate-700/50 shadow-sm">
-            
-            {/* Header: Title & Date */}
-            <div className="mb-8 border-b border-slate-200 dark:border-slate-700 pb-6">
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
-                <div className="flex-1">
-                  {isEditingTitle ? (
-                    <input
-                      type="text"
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      onBlur={handleTitleBlur}
-                      onKeyDown={(e) => e.key === 'Enter' && handleTitleBlur()}
-                      autoFocus
-                      className="text-3xl md:text-4xl font-serif font-bold bg-transparent border-b-2 border-green-500 focus:outline-none w-full pb-2"
-                    />
-                  ) : (
-                    <h2 
-                      onClick={() => setIsEditingTitle(true)}
-                      className="text-3xl md:text-4xl font-serif font-bold uppercase cursor-pointer hover:text-green-700 transition-colors flex items-center gap-3 group"
-                    >
-                      {selectedDetail.title}
-                      <span className="opacity-0 group-hover:opacity-100 text-sm font-mono font-normal text-slate-500">✏️ Edit</span>
-                    </h2>
+    <div className="bg-white/60 dark:bg-brutal-dark/60 rounded-3xl p-8 border border-white/60 dark:border-slate-700/50 shadow-sm">
+      
+      {/* Header: Title & Date */}
+      <div className="mb-8 border-b border-slate-200 dark:border-slate-700 pb-6">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+          <div className="flex-1">
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onBlur={handleTitleBlur}
+                onKeyDown={(e) => e.key === 'Enter' && handleTitleBlur()}
+                autoFocus
+                className="text-3xl md:text-4xl font-serif font-bold bg-transparent border-b-2 border-green-500 focus:outline-none w-full pb-2"
+              />
+            ) : (
+              <h2 
+                onClick={() => setIsEditingTitle(true)}
+                className="text-3xl md:text-4xl font-serif font-bold uppercase cursor-pointer hover:text-green-700 transition-colors flex items-center gap-3 group"
+              >
+                {selectedDetail.title}
+                <span className="opacity-0 group-hover:opacity-100 text-sm font-mono font-normal text-slate-500">✏️ Edit</span>
+              </h2>
+            )}
+          </div>
+          
+          <div className="text-right">
+             <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">{selectedDetail.budget_type}</p>
+             <p className="text-2xl font-bold text-green-700 dark:text-green-400">{selectedDetail.estimated_budget}</p>
+          </div>
+        </div>
+
+        {selectedDetail.start_date && selectedDetail.end_date && (
+          <div className="inline-flex items-center gap-3 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+            <span className="text-xl">📅</span>
+            <div>
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase">Periode Perjalanan</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                {new Date(selectedDetail.start_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {' - '}
+                {new Date(selectedDetail.end_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Itinerary Days Loop */}
+      <div className="space-y-8">
+        {editableDays.map((dayPlan, dayIndex) => {
+          const currentDate = selectedDetail?.start_date 
+            ? new Date(selectedDetail.start_date)
+            : null;
+          
+          const dayDate = currentDate 
+            ? new Date(currentDate.getTime() + (dayIndex * 24 * 60 * 60 * 1000))
+            : null;
+
+          const weather = getWeatherForDay(dayIndex);
+          
+          return (
+            <div key={dayPlan.day} className="relative pl-8 md:pl-12 border-l-2 border-dashed border-slate-300 dark:border-slate-700 last:border-0 pb-8 last:pb-0">
+              
+              {/* Day Marker */}
+              <div className="absolute -left-[14px] top-0 w-7 h-7 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-full flex items-center justify-center font-bold text-xs text-slate-500 z-10">
+                {dayPlan.day}
+              </div>
+
+              {/* Day Header dengan Tanggal & Weather */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-slate-900 dark:text-white">
+                    Hari {dayPlan.day}
+                  </h3>
+                  {dayDate && (
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                      {dayDate.toLocaleDateString('id-ID', { 
+                        weekday: 'long', 
+                        day: 'numeric', 
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </p>
                   )}
                 </div>
                 
-                <div className="text-right">
-                   <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">{selectedDetail.budget_type}</p>
-                   <p className="text-2xl font-bold text-green-700 dark:text-green-400">{selectedDetail.estimated_budget}</p>
-                </div>
+                {weather ? (
+                  <div className="flex items-center gap-3 mt-2 sm:mt-0 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                    <img src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`} alt={weather.description} className="w-8 h-8" />
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{weather.temp}°C</p>
+                      <p className="text-[10px] text-slate-500 capitalize">{weather.description}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 italic flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>Cuaca belum bisa diprediksi</span>
+                  </div>
+                )}
               </div>
 
-              {selectedDetail.start_date && selectedDetail.end_date && (
-                <div className="inline-flex items-center gap-3 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                  <span className="text-xl">📅</span>
-                  <div>
-                    <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase">Periode Perjalanan</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {new Date(selectedDetail.start_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
-                      {' - '}
-                      {new Date(selectedDetail.end_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Itinerary Days Loop */}
-            <div className="space-y-8">
-              {editableDays.map((dayPlan, dayIndex) => {
-                // ✅ Hitung tanggal untuk hari ini
-                const currentDate = selectedDetail?.start_date 
-                  ? new Date(selectedDetail.start_date)
-                  : null;
-                
-                const dayDate = currentDate 
-                  ? new Date(currentDate.getTime() + (dayIndex * 24 * 60 * 60 * 1000))
-                  : null;
-
-                const weather = getWeatherForDay(dayIndex);
-                
-                return (
-                  <div key={dayPlan.day} className="relative pl-8 md:pl-12 border-l-2 border-dashed border-slate-300 dark:border-slate-700 last:border-0 pb-8 last:pb-0">
+              {/* Slots List */}
+              <div className="space-y-3">
+                {dayPlan.slots.map((slot, slotIndex) => (
+                  <div key={slotIndex} className="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
                     
-                    {/* Day Marker */}
-                    <div className="absolute -left-[14px] top-0 w-7 h-7 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-700 rounded-full flex items-center justify-center font-bold text-xs text-slate-500 z-10">
-                      {dayPlan.day}
-                    </div>
-
-                    {/* Day Header dengan Tanggal & Weather */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <div>
-                        <h3 className="font-serif text-xl font-bold text-slate-900 dark:text-white">
-                          Hari {dayPlan.day}
-                        </h3>
-                        {/* ✅ Tampilkan Tanggal */}
-                        {dayDate && (
-                          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                            {dayDate.toLocaleDateString('id-ID', { 
-                              weekday: 'long', 
-                              day: 'numeric', 
-                              month: 'short',
-                              year: 'numeric'
-                            })}
-                          </p>
-                        )}
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="flex-shrink-0 w-16 text-center">
+                        <span className="block text-lg font-bold text-slate-900 dark:text-white font-mono">{slot.time_slot}</span>
                       </div>
                       
-                      {/* ✅ Weather Widget dengan Fallback */}
-                      {weather ? (
-                        <div className="flex items-center gap-3 mt-2 sm:mt-0 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                          <img src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`} alt={weather.description} className="w-8 h-8" />
-                          <div className="text-left">
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">{weather.temp}°C</p>
-                            <p className="text-[10px] text-slate-500 capitalize">{weather.description}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-slate-400 italic flex items-center gap-2">
-                          <span>⚠️</span>
-                          <span>Cuaca belum bisa diprediksi</span>
-                        </div>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-900 dark:text-white truncate">{slot.title}</p>
+                        {slot.notes && <p className="text-xs text-slate-500 italic truncate">{slot.notes}</p>}
+                      </div>
                     </div>
 
-                    {/* Slots List */}
-                    <div className="space-y-3">
-                      {dayPlan.slots.map((slot, slotIndex) => (
-                        <div key={slotIndex} className="group flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all">
-                          
-                          <div className="flex items-center gap-4 flex-1">
-                            {/* Time Badge */}
-                            <div className="flex-shrink-0 w-16 text-center">
-                              <span className="block text-lg font-bold text-slate-900 dark:text-white font-mono">{slot.time_slot}</span>
-                            </div>
-                            
-                            {/* Destination Info */}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-slate-900 dark:text-white truncate">{slot.title}</p>
-                              {slot.notes && <p className="text-xs text-slate-500 italic truncate">{slot.notes}</p>}
-                            </div>
-                          </div>
-
-                          {/* Actions: Edit, Reorder & Delete */}
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
-                            {/* ✅ Tombol Edit dari Wishlist */}
-                            <button 
-                              onClick={() => openEditSlotModal(dayIndex, slotIndex)}
-                              className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg"
-                              title="Ganti dari Wishlist"
-                            >
-                              ✏️
-                            </button>
-                            
-                            <button 
-                              onClick={() => moveSlot(dayIndex, slotIndex, 'up')}
-                              disabled={slotIndex === 0}
-                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Pindah Atas"
-                            >
-                              ↑
-                            </button>
-                            <button 
-                              onClick={() => moveSlot(dayIndex, slotIndex, 'down')}
-                              disabled={slotIndex === dayPlan.slots.length - 1}
-                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-                              title="Pindah Bawah"
-                            >
-                              ↓
-                            </button>
-                            <button 
-                              onClick={() => deleteSlot(dayIndex, slotIndex)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
-                              title="Hapus Destinasi"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
+                      <button 
+                        onClick={() => navigateSingleToMap(slot)}
+                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-all"
+                        title="Lihat di Peta"
+                        type="button"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </button>
                       
-                      {dayPlan.slots.length === 0 && (
-                        <p className="text-center text-sm text-slate-400 italic py-4">Belum ada destinasi untuk hari ini.</p>
-                      )}
+                      <button 
+                        onClick={() => openEditSlotModal(dayIndex, slotIndex)}
+                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg"
+                        title="Ganti dari Wishlist"
+                      >
+                        ✏️
+                      </button>
+                      
+                      <button 
+                        onClick={() => moveSlot(dayIndex, slotIndex, 'up')}
+                        disabled={slotIndex === 0}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Pindah Atas"
+                      >
+                        ↑
+                      </button>
+                      <button 
+                        onClick={() => moveSlot(dayIndex, slotIndex, 'down')}
+                        disabled={slotIndex === dayPlan.slots.length - 1}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Pindah Bawah"
+                      >
+                        ↓
+                      </button>
+                      <button 
+                        onClick={() => deleteSlot(dayIndex, slotIndex)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+                        title="Hapus Destinasi"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+                
+                {dayPlan.slots.length === 0 && (
+                  <p className="text-center text-sm text-slate-400 italic py-4">Belum ada destinasi untuk hari ini.</p>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* ✅ Destination Picker Modal */}
       {showDestinationPicker && (
@@ -1061,7 +1162,7 @@ const getWeatherForDay = (dayIndex: number) => {
         </div>
       )}
 
-      {/* ✅ Modal Edit Slot dari Wishlist */}
+      {/* ✅ Modal Edit Slot dari Wishlist - DENGAN TOMBOL NAVIGASI */}
       {showEditSlotModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowEditSlotModal(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1072,15 +1173,50 @@ const getWeatherForDay = (dayIndex: number) => {
             
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {wishlistForEdit.map((item: any) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-                     onClick={() => replaceSlotFromWishlist(item)}>
-                  <div>
+                <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                  {/* Area kiri untuk klik ganti slot */}
+                  <div className="flex-1 cursor-pointer" onClick={() => replaceSlotFromWishlist(item)}>
                     <p className="font-bold text-sm">{item.content?.title || item.title}</p>
                     <p className="text-xs text-slate-500">{item.content?.category?.name || item.category}</p>
                   </div>
-                  <button className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg">
-                    Ganti
-                  </button>
+                  
+                  {/* Tombol-tombol di kanan */}
+                  <div className="flex gap-2">
+                    {/* ✅ TOMBOL NAVIGASI - TAMBAH INI */}
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation(); // Jangan trigger replaceSlotFromWishlist
+                        // Navigasi ke destinasi ini
+                        if (item.content?.latitude && item.content?.longitude) {
+                          const destination = {
+                            lat: item.content.latitude,
+                            lng: item.content.longitude,
+                            title: item.content?.title || item.title,
+                          };
+                          const routeParam = encodeURIComponent(JSON.stringify([destination]));
+                          window.open(`/dashboard/peta?route=${routeParam}`, '_blank');
+                        } else {
+                          alert("Koordinat destinasi belum tersedia");
+                        }
+                      }}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                      title="Lihat di Peta"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Peta
+                    </button>
+                    
+                    {/* Tombol Ganti */}
+                    <button 
+                      onClick={() => replaceSlotFromWishlist(item)}
+                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg"
+                    >
+                      Ganti
+                    </button>
+                  </div>
                 </div>
               ))}
               {wishlistForEdit.length === 0 && (
