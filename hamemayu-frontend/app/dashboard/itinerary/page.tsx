@@ -334,7 +334,7 @@ export default function ItineraryPage() {
       }
     };
 
-    console.log("📤 SENDING PAYLOAD:", payload);
+    console.log("SENDING PAYLOAD:", payload);
 
     try {
       const token = localStorage.getItem('hamemayu_token');
@@ -349,7 +349,7 @@ export default function ItineraryPage() {
       });
 
       const data = await response.json();
-      console.log("📥 RESPONSE:", data);
+      console.log("RESPONSE:", data);
 
       if (!response.ok) {
         const errors = data.errors || data.data?.errors || {};
@@ -358,10 +358,10 @@ export default function ItineraryPage() {
         if (response.status === 422) {
           if (hasErrors) {
             const errorMessages = Object.values(errors).flat().join('\n');
-            console.error("❌ VALIDATION ERRORS:", errors);
+            console.error("VALIDATION ERRORS:", errors);
             alert(`GAGAL MENYIMPAN ITINERARY\n\n${errorMessages}`);
           } else {
-            console.error("❌ VALIDATION FAILED (empty errors):", data);
+            console.error("VALIDATION FAILED (empty errors):", data);
             alert(`GAGAL MENYIMPAN ITINERARY\n\n${data.message || 'Validasi gagal, cek console untuk detail'}`);
           }
         } else {
@@ -370,14 +370,14 @@ export default function ItineraryPage() {
         return;
       }
 
-      alert('✅ ITINERARY BERHASIL DISIMPAN!');
+      alert('ITINERARY BERHASIL DISIMPAN!');
       setActiveTab('list');
       setGeneratedResult(null);
       setManualDestinations([]);
       setShowScheduler(false);
       
     } catch (error: any) {
-      console.error("❌ SAVE ERROR:", error);
+      console.error("SAVE ERROR:", error);
       alert(`GAGAL MENYIMPAN: ${error.message}`);
     }
   };
@@ -417,7 +417,7 @@ export default function ItineraryPage() {
     }
   };
 
-// ✅ NAVIGASI SEMUA DESTINASI - PAKAI extractItineraryCoords YANG UDAH ADA
+// NAVIGASI SEMUA DESTINASI - PAKAI extractItineraryCoords YANG UDAH ADA
 const navigateAllToMap = async () => {
   try {
     if (!selectedDetail) {
@@ -425,7 +425,7 @@ const navigateAllToMap = async () => {
       return;
     }
 
-    console.log("🗺️ Navigasi semua destinasi...");
+    console.log("Navigasi semua destinasi...");
 
     // 1. Import dan pakai fungsi yang udah ada di itinerary-utils
     const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
@@ -433,7 +433,7 @@ const navigateAllToMap = async () => {
     // 2. Extract koordinat (udah handle semua logic matching)
     const destinations = await extractItineraryCoords(selectedDetail);
     
-    console.log("✅ Destinations extracted:", destinations);
+    console.log("Destinations extracted:", destinations);
 
     if (destinations.length === 0) {
       alert("Tidak ada destinasi dengan koordinat valid di itinerary ini.");
@@ -442,7 +442,7 @@ const navigateAllToMap = async () => {
 
     // 3. Buka peta (sama kayak wishlist)
     const routeParam = encodeURIComponent(JSON.stringify(destinations));
-    console.log("🚀 Opening peta dengan route:", destinations);
+    console.log("Opening peta dengan route:", destinations);
     window.location.href = `/dashboard/peta?route=${routeParam}`;
     
   } catch (err) {
@@ -451,28 +451,28 @@ const navigateAllToMap = async () => {
   }
 };
 
-// ✅ NAVIGASI SATU DESTINASI - FINAL FIX DENGAN FALLBACK TITLE MATCHING
+// NAVIGASI SATU DESTINASI - FINAL FIX DENGAN FALLBACK TITLE MATCHING
 const navigateSingleToMap = async (slot: ItinerarySlot) => {
   try {
-    console.log("📍 Navigasi slot:", slot);
+    console.log("Navigasi slot:", slot);
 
-    // ✅ Fetch semua markers dari database
+    // Fetch semua markers dari database
     const markers: any[] = await fetchAPI('/map-markers');
     
     if (!Array.isArray(markers)) {
-      alert(`❌ Gagal memuat data peta.`);
+      alert(`Gagal memuat data peta.`);
       return;
     }
 
     let matchedMarker = null;
 
-    // ✅ PRIORITAS 1: Match by content_id (kalau ada)
+    // PRIORITAS 1: Match by content_id (kalau ada)
     if (slot.content_id) {
       matchedMarker = markers.find(m => m.id === slot.content_id);
-      console.log("🔍 Match by content_id:", matchedMarker);
+      console.log("Match by content_id:", matchedMarker);
     }
 
-    // ✅ PRIORITAS 2: Fallback - Match by title (case-insensitive)
+    // PRIORITAS 2: Fallback - Match by title (case-insensitive)
     if (!matchedMarker && slot.title) {
       const slotTitle = slot.title.toLowerCase().trim();
       
@@ -489,11 +489,11 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
     }
 
     if (!matchedMarker) {
-      alert(`❌ Destinasi "${slot.title}" tidak ditemukan di database peta.\n\nKemungkinan penyebab:\n1. Destinasi belum ditambahkan ke database\n2. Nama destinasi berbeda dengan yang di database`);
+      alert(`Destinasi "${slot.title}" tidak ditemukan di database peta.\n\nKemungkinan penyebab:\n1. Destinasi belum ditambahkan ke database\n2. Nama destinasi berbeda dengan yang di database`);
       return;
     }
 
-    // ✅ Parse koordinat (handle string atau number)
+    // Parse koordinat (handle string atau number)
     const lat = typeof matchedMarker.lat === 'string' ? parseFloat(matchedMarker.lat) : matchedMarker.lat;
     const lng = typeof matchedMarker.lng === 'string' ? parseFloat(matchedMarker.lng) : matchedMarker.lng;
 
@@ -507,15 +507,15 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
       
       console.log("🗺️ Opening peta dengan koordinat:", destination);
       
-      // ✅ Buka peta internal (format sama kayak wishlist)
+      // Buka peta internal (format sama kayak wishlist)
       const routeParam = encodeURIComponent(JSON.stringify([destination]));
       window.location.href = `/dashboard/peta?route=${routeParam}`;
     } else {
-      alert(`⚠️ Koordinat "${matchedMarker.title}" belum tersedia di database.`);
+      alert(`Koordinat "${matchedMarker.title}" belum tersedia di database.`);
     }
   } catch (err: any) {
     console.error("Navigation error:", err);
-    alert(`❌ Gagal membuka peta navigasi\n\nError: ${err.message || 'Unknown error'}`);
+    alert(`Gagal membuka peta navigasi\n\nError: ${err.message || 'Unknown error'}`);
   }
 };
 
@@ -541,7 +541,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
       await fetchAPI(`/itinerary/history/${selectedDetail.id}`, {
         method: 'DELETE', requireAuth: true
       });
-      alert('✅ Itinerary berhasil dihapus!');
+      alert('Itinerary berhasil dihapus!');
       setActiveTab('list');
       setSelectedDetail(null);
     } catch (error) {
@@ -621,7 +621,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
       itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } 
     });
     
-    alert("✅ Destinasi berhasil diganti!");
+    alert("Destinasi berhasil diganti!");
   };
 
   return (
@@ -820,7 +820,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
         </div>
       )}
 
-{/* ✅ DETAIL TAB - LAYOUT DIPERBAIKI */}
+{/* DETAIL TAB - LAYOUT DIPERBAIKI */}
 {activeTab === 'detail' && selectedDetail && editableDays && (
   <div>
     {/* Header dengan Tombol di Atas */}
@@ -1034,7 +1034,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
   </div>
 )}
 
-      {/* ✅ Destination Picker Modal */}
+      {/* Destination Picker Modal */}
       {showDestinationPicker && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDestinationPicker(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1043,7 +1043,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
               <button onClick={() => setShowDestinationPicker(false)} className="text-slate-500 hover:text-slate-700">✕</button>
             </div>
             <div className="mb-6">
-              <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">❤️ Wishlist Saya</h4>
+              <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">Wishlist Saya</h4>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {wishlistItems.map((item: any) => (
                   <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
@@ -1055,7 +1055,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
               </div>
             </div>
             <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-              <h4 className="font-bold text-sm mb-3">🔍 Cari dari Database</h4>
+              <h4 className="font-bold text-sm mb-3">Cari Destinasi</h4>
               <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); searchDestinations(e.target.value); }} placeholder="Cari destinasi..." className="w-full p-3 border rounded-xl mb-3" />
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {searchResults.map((dest: any) => (
@@ -1070,7 +1070,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
         </div>
       )}
 
-      {/* ✅ MANUAL SCHEDULER MODAL */}
+      {/* MANUAL SCHEDULER MODAL */}
       {showScheduler && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowScheduler(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1168,7 +1168,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
         </div>
       )}
 
-      {/* ✅ Modal Edit Slot dari Wishlist - DENGAN TOMBOL NAVIGASI */}
+      {/* Modal Edit Slot dari Wishlist - DENGAN TOMBOL NAVIGASI */}
       {showEditSlotModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowEditSlotModal(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -1188,7 +1188,7 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
                   
                   {/* Tombol-tombol di kanan */}
                   <div className="flex gap-2">
-                    {/* ✅ TOMBOL NAVIGASI - TAMBAH INI */}
+                    {/* TOMBOL NAVIGASI - TAMBAH INI */}
                     <button
                       onClick={async (e) => {
                         e.stopPropagation(); // Jangan trigger replaceSlotFromWishlist
