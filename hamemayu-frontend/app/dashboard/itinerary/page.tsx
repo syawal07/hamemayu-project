@@ -417,95 +417,101 @@ export default function ItineraryPage() {
     }
   };
 
-  // ✅ NAVIGASI SEMUA DESTINASI DI ITINERARY
-  const navigateAllToMap = async () => {
-    try {
-      if (!editableDays || editableDays.length === 0) {
-        alert("Tidak ada destinasi untuk dinavigasi.");
-        return;
-      }
-
-      const allSlots = editableDays.flatMap(day => day.slots);
-      
-      const destinations = await Promise.all(
-        allSlots.map(async (slot) => {
-          if (slot.content_id) {
-            try {
-              const res = await fetchAPI(`/contents/${slot.content_id}`);
-              if (res && res.data && res.data.latitude && res.data.longitude) {
-                return {
-                  lat: res.data.latitude,
-                  lng: res.data.longitude,
-                  title: slot.title,
-                };
-              }
-            } catch (err) {
-              console.error(`Failed to fetch coords for ${slot.title}:`, err);
-            }
-          }
-          return null;
-        })
-      );
-
-      const validDestinations = destinations.filter((d): d is {lat: number; lng: number; title: string} => d !== null);
-
-      if (validDestinations.length === 0) {
-        alert("Tidak ada destinasi dengan koordinat valid di itinerary ini.");
-        return;
-      }
-
-      const routeParam = encodeURIComponent(JSON.stringify(validDestinations));
-      window.open(`/dashboard/peta?route=${routeParam}`, '_blank');
-      
-    } catch (err) {
-      console.error("Navigation failed:", err);
-      alert("Gagal membuka peta navigasi.");
+// ✅ NAVIGASI SEMUA DESTINASI - PAKAI extractItineraryCoords YANG UDAH ADA
+const navigateAllToMap = async () => {
+  try {
+    if (!selectedDetail) {
+      alert("Itinerary belum dimuat dengan benar.");
+      return;
     }
-  };
 
-// ✅ NAVIGASI SATU DESTINASI - FIX FIELD NAME (lat/lng)
+    console.log("🗺️ Navigasi semua destinasi...");
+
+    // 1. Import dan pakai fungsi yang udah ada di itinerary-utils
+    const { extractItineraryCoords } = await import('../../lib/itinerary-utils');
+    
+    // 2. Extract koordinat (udah handle semua logic matching)
+    const destinations = await extractItineraryCoords(selectedDetail);
+    
+    console.log("✅ Destinations extracted:", destinations);
+
+    if (destinations.length === 0) {
+      alert("Tidak ada destinasi dengan koordinat valid di itinerary ini.");
+      return;
+    }
+
+    // 3. Buka peta (sama kayak wishlist)
+    const routeParam = encodeURIComponent(JSON.stringify(destinations));
+    console.log("🚀 Opening peta dengan route:", destinations);
+    window.location.href = `/dashboard/peta?route=${routeParam}`;
+    
+  } catch (err) {
+    console.error("Nav all failed:", err);
+    alert("Gagal memuat data peta.");
+  }
+};
+
+// ✅ NAVIGASI SATU DESTINASI - FINAL FIX DENGAN FALLBACK TITLE MATCHING
 const navigateSingleToMap = async (slot: ItinerarySlot) => {
   try {
     console.log("📍 Navigasi slot:", slot);
 
-    if (!slot.content_id) {
-      alert(`⚠️ Destinasi "${slot.title}" belum memiliki data lokasi.`);
-      return;
-    }
-
-    // Fetch semua contents
-    const res = await fetchAPI('/contents?per_page=1000');
+    // ✅ Fetch semua markers dari database
+    const markers: any[] = await fetchAPI('/map-markers');
     
-    if (!res || !Array.isArray(res)) {
-      alert(`❌ Gagal memuat data destinasi.`);
+    if (!Array.isArray(markers)) {
+      alert(`❌ Gagal memuat data peta.`);
       return;
     }
 
-    // Cari content yang ID-nya match
-    const contentData = res.find((item: any) => item.id === slot.content_id);
-    
-    console.log("📥 Found content:", contentData);
+    let matchedMarker = null;
 
-    if (!contentData) {
-      alert(`❌ Destinasi "${slot.title}" tidak ditemukan di database.`);
+    // ✅ PRIORITAS 1: Match by content_id (kalau ada)
+    if (slot.content_id) {
+      matchedMarker = markers.find(m => m.id === slot.content_id);
+      console.log("🔍 Match by content_id:", matchedMarker);
+    }
+
+    // ✅ PRIORITAS 2: Fallback - Match by title (case-insensitive)
+    if (!matchedMarker && slot.title) {
+      const slotTitle = slot.title.toLowerCase().trim();
+      
+      matchedMarker = markers.find(marker => {
+        const markerTitle = marker.title.toLowerCase().trim();
+        
+        // Match exact atau contains
+        return markerTitle === slotTitle || 
+               markerTitle.includes(slotTitle) || 
+               slotTitle.includes(markerTitle);
+      });
+      
+      console.log("🔍 Match by title:", matchedMarker);
+    }
+
+    if (!matchedMarker) {
+      alert(`❌ Destinasi "${slot.title}" tidak ditemukan di database peta.\n\nKemungkinan penyebab:\n1. Destinasi belum ditambahkan ke database\n2. Nama destinasi berbeda dengan yang di database`);
       return;
     }
 
-    // ✅ CEK FIELD YANG BENER: lat & lng (bukan latitude/longitude)
-    if (contentData.lat && contentData.lng) {
+    // ✅ Parse koordinat (handle string atau number)
+    const lat = typeof matchedMarker.lat === 'string' ? parseFloat(matchedMarker.lat) : matchedMarker.lat;
+    const lng = typeof matchedMarker.lng === 'string' ? parseFloat(matchedMarker.lng) : matchedMarker.lng;
+
+    if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
       const destination = {
-        lat: parseFloat(contentData.lat),   // ✅ PAKAI .lat
-        lng: parseFloat(contentData.lng),   // ✅ PAKAI .lng
-        title: contentData.title || slot.title,
+        lat: lat,
+        lng: lng,
+        title: matchedMarker.title || slot.title,
+        content_id: matchedMarker.id,
       };
       
       console.log("🗺️ Opening peta dengan koordinat:", destination);
       
-      // Buka peta internal dengan koordinat
+      // ✅ Buka peta internal (format sama kayak wishlist)
       const routeParam = encodeURIComponent(JSON.stringify([destination]));
-      window.open(`/dashboard/peta?route=${routeParam}`, '_blank');
+      window.location.href = `/dashboard/peta?route=${routeParam}`;
     } else {
-      alert(`⚠️ Koordinat "${slot.title}" belum tersedia di database.\n\nLat: ${contentData.lat}, Lng: ${contentData.lng}`);
+      alert(`⚠️ Koordinat "${matchedMarker.title}" belum tersedia di database.`);
     }
   } catch (err: any) {
     console.error("Navigation error:", err);
