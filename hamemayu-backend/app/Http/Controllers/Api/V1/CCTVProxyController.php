@@ -22,8 +22,7 @@ class CCTVProxyController extends Controller
 
             $html = $response->body();
 
-            // ✅ SCRIPT SUPER AGGRESSIVE DENGAN MUTATION OBSERVER
-            // ✅ SCRIPT DENGAN PREVENT DOUBLE-CLICK
+            // SCRIPT DENGAN PREVENT DOUBLE-CLICK
             $script = '
             <script>
                 (function() {

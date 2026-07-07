@@ -17,7 +17,7 @@ export default function LiveCCTVPage() {
     }, 3000);
     
     return () => clearTimeout(timer);
-  }, []); // ✅ Empty dependency = cuma jalan sekali
+  }, []); // Empty dependency = cuma jalan sekali
 
   const handleRefresh = () => {
     setIsLoading(true);

@@ -28,7 +28,7 @@ class CCTVController extends Controller
         return response()->json(['success' => true, 'data' => $data]);
     }
 
-    // ✅ PROXY STREAM (Bypass CORS & Referrer)
+    // PROXY STREAM (Bypass CORS & Referrer)
     public function proxyStream($cameraId)
     {
         $cameras = $this->extractor->getCameraStreams();
