@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\ChatController;
 use App\Models\SiteSetting;
 use App\Models\Feature;
 use App\Models\Faq;
+use App\Http\Controllers\Api\V1\CCTVController;
 
 Route::prefix('v1')->group(function () {
 
@@ -72,5 +73,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/chat', [ChatController::class, 'chat']);
 
     });
+
+    // CCTV Routes
+    Route::prefix('cctv')->group(function () {
+        Route::get('/cameras', [CCTVController::class, 'getCameras']);
+        Route::post('/refresh', [CCTVController::class, 'refresh']);
+        Route::get('/proxy/{cameraId}', [CCTVController::class, 'proxyStream']);
+    });
+
+    // Tambahkan route ini (PASTIKAN DI LUAR middleware auth jika ada)
+    Route::get('/cctv-proxy', [\App\Http\Controllers\Api\V1\CCTVProxyController::class, 'index']);
 
 });
