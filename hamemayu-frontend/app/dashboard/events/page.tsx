@@ -9,9 +9,9 @@ import type { Event, CalendarDay } from '../../types/event';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 const getAuthToken = () => {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('hamemayu_token');
-};
+    if (typeof window === 'undefined') return null;
+    return document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1] || null;
+  };
 
 export default function EventsPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -23,24 +23,40 @@ export default function EventsPage() {
   const now = new Date();
   const [viewDate, setViewDate] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
 
-  // Fetch Calendar Data
-  const fetchCalendar = useCallback(async () => {
+// ✅ Fetch Calendar Data - FIXED
+const fetchCalendar = useCallback(async () => {
     try {
+      const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
+      
       const res = await fetch(`${API_BASE}/events/calendar?year=${viewDate.year}&month=${viewDate.month}`, {
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
       });
+      
+      if (!res.ok) {
+        if (res.status === 401) {
+          console.error('Unauthorized - please login again');
+          return;
+        }
+        throw new Error('Failed to fetch calendar');
+      }
+      
       const data = await res.json();
       setCalendarData(data.days || []);
     } catch (err) {
       console.error('Calendar fetch error:', err);
     }
   }, [viewDate]);
-
-  // Fetch Events List
+  
+  // ✅ Fetch Events List - FIXED  
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
+      
       const params = new URLSearchParams({
         month: viewDate.month.toString(),
         year: viewDate.year.toString(),
@@ -48,7 +64,6 @@ export default function EventsPage() {
         ...(selectedCategory !== 'all' && { category: selectedCategory })
       });
       
-      const token = getAuthToken();
       const res = await fetch(`${API_BASE}/events?${params}`, {
         headers: { 
           'Accept': 'application/json',
@@ -56,7 +71,13 @@ export default function EventsPage() {
         }
       });
       
-      if (!res.ok) throw new Error('Gagal memuat data event');
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error('Session expired. Please login again.');
+        }
+        throw new Error('Gagal memuat data event');
+      }
+      
       const data = await res.json();
       setEventsList(data.data || []);
     } catch (err: any) {

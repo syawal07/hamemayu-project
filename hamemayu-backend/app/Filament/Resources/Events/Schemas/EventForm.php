@@ -30,9 +30,9 @@ class EventForm
                         ->afterStateUpdated(fn (string $state, callable $set) => $set('slug', Str::slug($state))),
                     TextInput::make('slug')->required()->unique(ignoreRecord: true),
                     RichEditor::make('description')->columnSpanFull(),
-                    FileUpload::make('image')->image()->directory('events')->maxSize(2048),
+                    FileUpload::make('image')->image()->directory('events')->disk('public')->maxSize(2048),
                     Repeater::make('gallery')
-                        ->schema([FileUpload::make('url')->image()->directory('events/gallery')])
+                        ->schema([FileUpload::make('url')->image()->directory('events/gallery')->disk('public')])
                         ->columns(3),
                 ])->columns(2),
 
