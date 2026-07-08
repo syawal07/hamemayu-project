@@ -14,6 +14,17 @@ export default function EventsPage() {
   const [eventsList, setEventsList] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const handleEventSelect = (event: any) => {
+    // Scroll ke card event di bawah
+    const element = document.getElementById(`event-${event.id}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.classList.add('ring-2', 'ring-green-500');
+      setTimeout(() => {
+        element.classList.remove('ring-2', 'ring-green-500');
+      }, 2000);
+    }
+  };
   
   const now = new Date();
   const [viewDate, setViewDate] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
@@ -162,7 +173,12 @@ export default function EventsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {eventsList.map(event => (
-              <EventCard key={event.id} event={event} />
+            <EventCard 
+                key={event.id}  // ✅ WAJIB: unique key untuk setiap item di map
+                event={event} 
+                onAddToWishlist={() => console.log('Wishlist:', event.slug)}
+                onAddToItinerary={() => console.log('Itinerary:', event.slug)}
+            />
             ))}
           </div>
         )}
