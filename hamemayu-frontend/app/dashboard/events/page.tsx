@@ -6,12 +6,7 @@ import CategoryTabs from './CategoryTabs';
 import EventCard from './EventCard';
 import type { Event, CalendarDay } from '../../types/event';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-const getAuthToken = () => {
-    if (typeof window === 'undefined') return null;
-    return document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1] || null;
-  };
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost/api/v1';
 
 export default function EventsPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -23,40 +18,38 @@ export default function EventsPage() {
   const now = new Date();
   const [viewDate, setViewDate] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
 
-// ✅ Fetch Calendar Data - FIXED
-const fetchCalendar = useCallback(async () => {
+  // ✅ FIX 1: Fetch Calendar Data - SEKARANG TERMASUK FILTER KATEGORI
+  const fetchCalendar = useCallback(async () => {
     try {
+      const params = new URLSearchParams({
+        year: viewDate.year.toString(),
+        month: viewDate.month.toString(),
+        // ✅ KIRIM KATEGORI JUGA!
+        ...(selectedCategory !== 'all' && { category: selectedCategory })
+      });
+
       const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
       
-      const res = await fetch(`${API_BASE}/events/calendar?year=${viewDate.year}&month=${viewDate.month}`, {
+      const res = await fetch(`${API_BASE}/events/calendar?${params}`, {
         headers: { 
           'Accept': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
         }
       });
       
-      if (!res.ok) {
-        if (res.status === 401) {
-          console.error('Unauthorized - please login again');
-          return;
-        }
-        throw new Error('Failed to fetch calendar');
-      }
-      
+      if (!res.ok) throw new Error('Gagal memuat kalender');
       const data = await res.json();
       setCalendarData(data.days || []);
     } catch (err) {
       console.error('Calendar fetch error:', err);
     }
-  }, [viewDate]);
-  
-  // ✅ Fetch Events List - FIXED  
+  }, [viewDate, selectedCategory]); // ✅ DEPENDENCY: update kalau tanggal ATAU kategori berubah
+
+  // ✅ FIX 2: Fetch Events List
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
-      
       const params = new URLSearchParams({
         month: viewDate.month.toString(),
         year: viewDate.year.toString(),
@@ -64,6 +57,7 @@ const fetchCalendar = useCallback(async () => {
         ...(selectedCategory !== 'all' && { category: selectedCategory })
       });
       
+      const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
       const res = await fetch(`${API_BASE}/events?${params}`, {
         headers: { 
           'Accept': 'application/json',
@@ -71,13 +65,7 @@ const fetchCalendar = useCallback(async () => {
         }
       });
       
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Session expired. Please login again.');
-        }
-        throw new Error('Gagal memuat data event');
-      }
-      
+      if (!res.ok) throw new Error('Gagal memuat data event');
       const data = await res.json();
       setEventsList(data.data || []);
     } catch (err: any) {
@@ -87,13 +75,13 @@ const fetchCalendar = useCallback(async () => {
     }
   }, [viewDate, selectedCategory]);
 
-  // Initial & Dependency Load
+  // ✅ TRIGGER FETCH KETIKA TANGGAL ATAU KATEGORI BERUBAH
   useEffect(() => {
     fetchCalendar();
     fetchEvents();
   }, [fetchCalendar, fetchEvents]);
 
-  // Month Navigation
+  // ✅ NAVIGASI BULAN
   const handleMonthChange = (direction: 'prev' | 'next') => {
     setViewDate(prev => {
       let newMonth = prev.month + (direction === 'next' ? 1 : -1);
@@ -118,13 +106,13 @@ const fetchCalendar = useCallback(async () => {
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Category Tabs */}
       <CategoryTabs 
         selected={selectedCategory} 
         onChange={setSelectedCategory} 
       />
 
-      {/* Calendar Component */}
+      {/* Calendar Section */}
       <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 md:p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold capitalize text-slate-800 dark:text-slate-100">
@@ -149,7 +137,7 @@ const fetchCalendar = useCallback(async () => {
         <EventCalendar days={calendarData} loading={loading} />
       </section>
 
-      {/* Events Grid List */}
+      {/* Events List Section */}
       <section>
         <h2 className="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">
           Daftar Event {selectedCategory !== 'all' && `• ${selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}`}

@@ -62,21 +62,39 @@ class EventController extends Controller
         return response()->json($events);
     }
 
-    // ✅ 2. CALENDAR DATA (Grouped by Date)
+    // ✅ 2. CALENDAR DATA (Grouped by Date) - SEKARANG DENGAN FILTER
     public function calendar(Request $request)
     {
         $year = $request->year ?? now()->year;
         $month = $request->month ?? now()->month;
-
-        $events = Event::where('is_active', true)
-            ->where(fn ($q) => $q->whereYear('start_date', $year)->whereMonth('start_date', $month)
-            ->orWhere(fn ($sq) => $sq->whereNotNull('end_date')->whereYear('end_date', $year)->whereMonth('end_date', $month)))
-            ->get();
-
+        
+        // ✅ QUERY DASAR
+        $query = Event::where('is_active', true)
+            ->where(function ($q) use ($year, $month) {
+                // Event yang mulai di bulan ini
+                $q->whereYear('start_date', $year)
+                ->whereMonth('start_date', $month)
+                // ATAU event yang berakhir di bulan ini (multi-day events)
+                ->orWhere(function ($sq) use ($year, $month) {
+                    $sq->whereNotNull('end_date')
+                        ->whereYear('end_date', $year)
+                        ->whereMonth('end_date', $month);
+                });
+            });
+        
+        // ✅ FILTER KATEGORI (KALAU ADA)
+        if ($request->filled('category') && $request->category !== 'all') {
+            $query->where('category', $request->category);
+        }
+        
+        $events = $query->get();
+        
+        // ... (sisanya sama seperti sebelumnya)
         $grouped = [];
         foreach ($events as $e) {
             $start = $e->start_date->copy();
             $end = $e->end_date ? $e->end_date->copy() : $e->start_date->copy();
+            
             while ($start->lte($end)) {
                 $dateKey = $start->format('Y-m-d');
                 $grouped[$dateKey][] = [
@@ -89,7 +107,8 @@ class EventController extends Controller
                 $start->addDay();
             }
         }
-
+        
+        // ... (generate calendar days tetap sama)
         $daysInMonth = \Carbon\Carbon::create($year, $month, 1)->daysInMonth;
         $calendarDays = [];
         for ($day = 1; $day <= $daysInMonth; $day++) {
@@ -100,7 +119,7 @@ class EventController extends Controller
                 'events' => $grouped[$dateStr] ?? []
             ];
         }
-
+        
         return response()->json(['year' => $year, 'month' => $month, 'days' => $calendarDays]);
     }
 

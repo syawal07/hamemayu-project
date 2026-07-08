@@ -8,6 +8,17 @@ interface EventCalendarProps {
   onDateClick?: (date: string) => void;
 }
 
+// ✅ MAPPING WARNA BORDER BERDASARKAN KATEGORI
+const CATEGORY_BORDER_COLORS: Record<string, string> = {
+  concert: 'border-pink-500',
+  sports: 'border-blue-500',
+  culture: 'border-amber-600',
+  festival: 'border-purple-500',
+  social: 'border-orange-500',
+  exhibition: 'border-indigo-500',
+  other: 'border-slate-500'
+};
+
 export default function EventCalendar({ 
   days = [], 
   loading = false,
@@ -47,7 +58,7 @@ export default function EventCalendar({
               relative aspect-square rounded-xl border transition-all duration-200
               flex flex-col items-center justify-center gap-2
               ${hasEvents 
-                ? 'bg-white dark:bg-slate-800 border-green-300 dark:border-green-600/50 shadow-sm' 
+                ? 'bg-white dark:bg-slate-800 border-green-200 dark:border-green-600/30 shadow-sm hover:shadow-md' 
                 : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
               }
             `}
@@ -57,40 +68,37 @@ export default function EventCalendar({
               {day.day}
             </span>
 
-            {/* 2. LINGKARAN FOTO (DI BAWAH - BESAR & OVERLAP) */}
+            {/* 2. LINGKARAN FOTO DENGAN WARNA KATEGORI */}
             {hasEvents && (
-              // flex-row-reverse + -space-x-4 bikin efek tumpuk ke kanan
-              <div className="flex flex-row-reverse justify-center -space-x-4">
-                {day.events.slice(0, 4).map((ev, index) => (
-                  <div 
-                    key={ev.id} 
-                    // w-10 h-10 = Ukuran lebih besar (40px)
-                    // border-2 = Pemisah tebal antar lingkaran
-                    // z-index diatur biar yang terakhir muncul paling depan
-                    className={`
-                      w-10 h-10 rounded-full border-2 border-white dark:border-slate-900 
-                      overflow-hidden shadow-md relative
-                      ${index === 0 ? 'z-10' : index === 1 ? 'z-20' : index === 2 ? 'z-30' : 'z-40'}
-                    `}
-                    title={ev.title}
-                  >
-                    {ev.image ? (
-                      <img 
-                        src={ev.image} 
-                        alt={ev.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-green-500 dark:bg-yellow-400 flex items-center justify-center text-xs font-bold text-white dark:text-slate-900">
-                        {ev.category.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="flex flex-row-reverse justify-center -space-x-3">
+                {day.events.slice(0, 4).map((ev, index) => {
+                  const borderColor = CATEGORY_BORDER_COLORS[ev.category] || CATEGORY_BORDER_COLORS.other;
+                  return (
+                    <div 
+                      key={ev.id} 
+                      className={`
+                        w-10 h-10 rounded-full border-2 overflow-hidden shadow-md relative z-10
+                        ${borderColor}
+                      `}
+                      title={`${ev.title} (${ev.category})`}
+                    >
+                      {ev.image ? (
+                        <img 
+                          src={ev.image} 
+                          alt={ev.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className={`w-full h-full flex items-center justify-center text-xs font-bold text-white ${borderColor.replace('border-', 'bg-')}`}>
+                          {ev.category.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 
-                {/* Badge "+N" jika lebih dari 4 */}
                 {day.events.length > 4 && (
-                  <span className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 z-50 shadow-md">
+                  <span className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-slate-400 dark:border-slate-600 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 z-50 shadow-md">
                     +{day.events.length - 4}
                   </span>
                 )}
