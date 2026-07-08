@@ -48,12 +48,28 @@ export default function EventCalendar({
   const handleDateClick = (day: CalendarDay, event: React.MouseEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
     
-    // Posisi popup: di atas tanggal
-    setPopupPosition({
-      x: rect.left + (rect.width / 2) - 140, // Center popup (280px / 2)
-      y: rect.top - 450 // Muncul di atas
-    });
+    // POSISI LEBIH DEKET & SMART (nggak off screen)
+    const popupWidth = 320;
+    const popupHeight = 400;
     
+    // Hitung posisi horizontal (center dari tanggal)
+    let x = rect.left + (rect.width / 2) - (popupWidth / 2);
+    
+    // Hitung posisi vertical (di atas tanggal, tapi jangan sampai off screen)
+    let y = rect.top - popupHeight - 10; // 10px gap
+    
+    // Kalau nggak muat di atas, taruh di bawah
+    if (y < 10) {
+      y = rect.bottom + 10;
+    }
+    
+    // Pastikan nggak off screen kiri/kanan
+    if (x < 10) x = 10;
+    if (x + popupWidth > window.innerWidth) {
+      x = window.innerWidth - popupWidth - 10;
+    }
+    
+    setPopupPosition({ x, y });
     setSelectedDay(day);
     onDateClick?.(day.date);
   };
@@ -134,7 +150,7 @@ export default function EventCalendar({
         })}
       </div>
 
-      {/* ✅ POPUP DETAIL EVENT */}
+      {/* POPUP DETAIL EVENT */}
       {selectedDay && (
         <EventDatePopup
           day={selectedDay}
