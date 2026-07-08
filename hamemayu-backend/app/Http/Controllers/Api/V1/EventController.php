@@ -99,6 +99,7 @@ class EventController extends Controller
                 $dateKey = $start->format('Y-m-d');
                 $grouped[$dateKey][] = [
                     'id' => $e->id,
+                    'slug' => $e->slug,
                     'title' => $e->title,
                     'image' => $e->image ? Storage::disk('public')->url($e->image) : null,
                     'category' => $e->category,

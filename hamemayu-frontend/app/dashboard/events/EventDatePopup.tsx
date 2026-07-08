@@ -1,13 +1,12 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import type { CalendarDay } from '../../types/event';
-import Image from 'next/image';
 
 interface EventDatePopupProps {
   day: CalendarDay;
   position: { x: number; y: number };
   onClose: () => void;
-  onEventClick?: (event: any) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -33,10 +32,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function EventDatePopup({ 
   day, 
   position, 
-  onClose,
-  onEventClick 
+  onClose 
 }: EventDatePopupProps) {
+  const router = useRouter(); // ✅ NEXT.JS ROUTER
+
   if (day.events.length === 0) return null;
+
+  const handleEventClick = (slug: string) => {
+    onClose();
+    // ✅ NAVIGASI KE HALAMAN DETAIL EVENT
+    router.push(`/dashboard/events/${slug}`);
+  };
 
   return (
     <div 
@@ -46,11 +52,8 @@ export default function EventDatePopup({
         left: position.x,
       }}
     >
-      {/* Backdrop (klik luar untuk tutup) */}
-      <div 
-        className="fixed inset-0" 
-        onClick={onClose}
-      />
+      {/* Backdrop */}
+      <div className="fixed inset-0" onClick={onClose} />
       
       {/* Popup Content */}
       <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -78,16 +81,13 @@ export default function EventDatePopup({
           </p>
         </div>
 
-        {/* Event List */}
+        {/* Event List - CLICKABLE */}
         <div className="max-h-[400px] overflow-y-auto p-3 space-y-2">
           {day.events.map((event) => (
             <button
               key={event.id}
-              onClick={() => {
-                onEventClick?.(event);
-                onClose();
-              }}
-              className="w-full text-left p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition group"
+              onClick={() => handleEventClick(event.slug)} // ✅ NAVIGASI PAS KLIK
+              className="w-full text-left p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition group cursor-pointer"
             >
               <div className="flex gap-3">
                 {/* Thumbnail */}
@@ -126,6 +126,19 @@ export default function EventDatePopup({
               </div>
             </button>
           ))}
+        </div>
+
+        {/* Footer - View All Button */}
+        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+          <button
+            onClick={() => {
+              onClose();
+              router.push('/dashboard/events');
+            }}
+            className="w-full py-2 text-sm font-bold text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition"
+          >
+            Lihat Semua Event →
+          </button>
         </div>
       </div>
     </div>

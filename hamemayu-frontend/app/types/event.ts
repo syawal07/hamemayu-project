@@ -34,6 +34,7 @@ export interface CalendarDay {
   day: number;
   events: Array<{
     id: number;
+    slug: string;
     title: string;
     image: string | null;
     category: EventCategory;
