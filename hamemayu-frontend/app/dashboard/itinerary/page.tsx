@@ -113,14 +113,48 @@ export default function ItineraryPage() {
 
   useEffect(() => {
     if (activeTab !== 'list' && activeTab !== 'detail') return;
+    
     const loadHistory = async () => {
       setLoading(true);
       try {
+        // Fetch list basic info
         const res = await fetchAPI<ItineraryHistory[]>('/itinerary/history', { requireAuth: true });
-        if (res && Array.isArray(res)) setHistoryList(res);
-      } catch (error) { console.error(error); }
-      finally { setLoading(false); }
+        
+        if (res && Array.isArray(res)) {
+          // Fetch detail untuk setiap itinerary biar dapet start_date, end_date, dll
+          const detailedHistory = await Promise.all(
+            res.map(async (item) => {
+              try {
+                const detail = await fetchAPI<ItineraryDetail>(`/itinerary/history/${item.id}`, { requireAuth: true });
+                
+                if (detail) {
+                  // Merge basic info dengan detail
+                  return {
+                    ...item,
+                    start_date: detail.start_date,
+                    end_date: detail.end_date,
+                    total_destinations: detail.total_destinations,
+                    itinerary_data: detail.itinerary_data,
+                  };
+                }
+                return item;
+              } catch (error) {
+                console.error(`Failed to fetch detail for itinerary ${item.id}:`, error);
+                return item; // Fallback ke basic info
+              }
+            })
+          );
+          
+          setHistoryList(detailedHistory);
+        }
+      } catch (error) { 
+        console.error(error); 
+      }
+      finally { 
+        setLoading(false); 
+      }
     };
+    
     loadHistory();
   }, [activeTab]);
 
@@ -403,7 +437,7 @@ export default function ItineraryPage() {
   
       setSelectedDetail(res);
       
-      // ✅ NORMALISASI DATA: Bersihin format AI jadi kayak manual
+      // NORMALISASI DATA: Bersihin format AI jadi kayak manual
       const normalizedDays = res.itinerary_data.days.map((day: ItineraryDay) => ({
         ...day,
         slots: day.slots.map(slot => {
@@ -414,7 +448,7 @@ export default function ItineraryPage() {
             return slot;
           }
           
-          // ✅ Parse format AI yang kompleks
+          // Parse format AI yang kompleks
           const lines = rawTitle.split('\n').map(l => l.trim()).filter(l => l);
           let extractedTitle = '';
           let extractedTime = slot.time_slot || '';
@@ -771,6 +805,27 @@ const addSelectedDestinations = () => {
 };
 
 
+// Hitung jumlah hari yang sebenarnya
+const calculateActualDays = (startDate: string | undefined, endDate: string | undefined): number => {
+  if (!startDate || !endDate) return 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 karena inclusive
+};
+
+// Hitung jumlah destinasi yang sebenarnya
+const calculateActualDestinations = (item: ItineraryHistory): number => {
+  // Kalau ada itinerary_data, hitung dari slots
+  if ('itinerary_data' in item && (item as any).itinerary_data?.days) {
+    const days = (item as any).itinerary_data.days;
+    return days.reduce((acc: number, day: any) => acc + (day.slots?.length || 0), 0);
+  }
+  // Fallback: estimasi dari days
+  return item.days * 2 || 0; // Asumsi 2 destinasi per hari
+};
+
+
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12">
@@ -956,56 +1011,92 @@ const addSelectedDestinations = () => {
       <div className="text-center py-20">Loading...</div>
     ) : historyList.length > 0 ? (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {historyList.map(item => (
-          <div key={item.id} className="bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group">
-            
-            {/* Tombol Hapus (Muncul pas hover) */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent card click
-                handleDeleteItinerary(item.id); // Pass ID directly
-              }}
-              className="absolute top-4 right-4 p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-900/50"
-              title="Hapus Itinerary"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-
-            <h3 className="font-serif text-xl font-bold mb-3 pr-8">{item.title}</h3>
-            
-            {/* Tanggal Start - End */}
-            {item.start_date && item.end_date ? (
-              <div className="flex items-center gap-2 mb-3 text-sm text-slate-600 dark:text-slate-400">
+        {historyList.map(item => {
+          // Hitung hari dengan fallback
+          let displayDays = item.days || 0;
+          if (item.start_date && item.end_date) {
+            try {
+              const start = new Date(item.start_date);
+              const end = new Date(item.end_date);
+              if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                const diffTime = Math.abs(end.getTime() - start.getTime());
+                displayDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              }
+            } catch (e) {
+              console.error('Date parsing error:', e);
+            }
+          }
+          
+          // Hitung destinasi dengan fallback
+          let displayDestinations = 0;
+          
+          // Coba ambil dari itinerary_data kalau ada
+          if ('itinerary_data' in item && (item as any).itinerary_data?.days) {
+            const days = (item as any).itinerary_data.days;
+            displayDestinations = days.reduce((acc: number, day: any) => {
+              return acc + (day.slots?.length || 0);
+            }, 0);
+          } else {
+            // Fallback: pakai total_destinations dari item
+            displayDestinations = item.total_destinations || 0;
+          }
+          
+          return (
+            <div key={item.id} className="bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group">
+              
+              {/* Tombol Hapus */}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteItinerary(item.id);
+                }}
+                className="absolute top-4 right-4 p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-900/50"
+                title="Hapus Itinerary"
+              >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
-                <span className="font-mono">
-                  {new Date(item.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - 
-                  {new Date(item.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
-              </div>
-            ) : (
-              <p className="font-mono text-xs text-slate-500 mb-3">{item.days} Hari</p>
-            )}
+              </button>
 
-            {/* Jumlah Destinasi */}
-            <div className="flex items-center gap-2 mb-4 text-xs text-slate-500 dark:text-slate-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              </svg>
-              <span>{item.total_destinations || item.days * 2} Destinasi</span>
+              <h3 className="font-serif text-xl font-bold mb-3 pr-8">{item.title}</h3>
+              
+              
+              {/* Display */}
+              <div className="space-y-2 mb-4">
+                {/* Jumlah Hari */}
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="font-mono">{displayDays} Hari</span>
+                </div>
+                
+                {/* Jumlah Destinasi */}
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  </svg>
+                  <span className="font-mono">{displayDestinations} Destinasi</span>
+                </div>
+              </div>
+              
+              {/* Tanggal Range */}
+              {item.start_date && item.end_date ? (
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-4 font-mono">
+                  {new Date(item.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} - 
+                  {new Date(item.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </div>
+              ) : null}
+              
+              <button 
+                onClick={() => handleViewDetail(item.id)} 
+                className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-mono text-xs font-bold uppercase mt-2 hover:opacity-90 transition-opacity"
+              >
+                LIHAT DETAIL
+              </button>
             </div>
-            
-            <button 
-              onClick={() => handleViewDetail(item.id)} 
-              className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-mono text-xs font-bold uppercase mt-2 hover:opacity-90 transition-opacity"
-            >
-              LIHAT DETAIL
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     ) : (
       <div className="text-center py-20">
