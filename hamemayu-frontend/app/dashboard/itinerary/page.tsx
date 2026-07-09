@@ -217,10 +217,35 @@ export default function ItineraryPage() {
   };
 
   const searchDestinations = async (query: string) => {
-    if (!query.trim()) { setSearchResults([]); return; }
+    if (!query.trim()) { 
+      setSearchResults([]); 
+      return; 
+    }
+    
     try {
-      const res = await fetchAPI(`/contents?search=${query}&limit=10`);
-      if (res && res.data) setSearchResults(res.data);
+      // Tambah { requireAuth: true } biar token dikirim
+      const contentsRes = await fetchAPI(`/contents?search=${query}&limit=20`, { requireAuth: true });
+      const contents = contentsRes?.data || contentsRes || [];
+      
+      // Tambah { requireAuth: true } juga di sini
+      const eventsRes = await fetchAPI(`/events?search=${query}&limit=20`, { requireAuth: true });
+      const events = eventsRes?.data || eventsRes || [];
+      
+      // Gabungkan hasil
+      const allResults = [
+        ...contents.map((item: any) => ({
+          ...item,
+          type: 'destination',
+          category: item.category || { name: 'Destinasi' },
+        })),
+        ...events.map((item: any) => ({
+          ...item,
+          type: 'event',
+          category: item.category || { name: 'Event' },
+        })),
+      ];
+      
+      setSearchResults(allResults);
     } catch (error) {
       console.error('Search error:', error);
     }
@@ -367,35 +392,42 @@ export default function ItineraryPage() {
     const endDateTime = `${endDate} ${endTime || '23:59'}:00`;
     const daysArray = generatedResult.days || [];
     
-    const totalDestinations = generatedResult.summary.total_destinations 
-      ? Math.floor(parseInt(String(generatedResult.summary.total_destinations))) 
-      : daysArray.reduce((acc: number, day: any) => acc + day.slots.length, 0);
+    // Hitung total destinasi dari data yang ada
+    const totalDestinations = daysArray.reduce((acc: number, day: any) => acc + (day.slots?.length || 0), 0);
 
-      const payload = {
-        title: formTitle || 'Rencana Eksplorasi Baru',
-        start_date: startDateTime,
-        end_date: endDateTime,
-        days: calculateDays(),
-        budget_type: formBudget,
-        total_destinations: totalDestinations,
-        estimated_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
-        itinerary_data: {
-          summary: {
-            total_days: calculateDays(),
-            total_destinations: totalDestinations,
-            estimated_total_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
-            highlights: generatedResult.summary.highlights || [],
-          },
-          //  PASTIKAN days ada & setiap day punya slots
-          days: daysArray.map(day => ({
-            day: day.day,
-            theme: day.theme || `Hari ${day.day}`,
-            slots: day.slots || [], //  Pastikan slots ada
+    //  NORMALISASI PAYLOAD: Pastikan struktur days dan slots pasti ada
+    const payload = {
+      title: formTitle || 'Rencana Eksplorasi Baru',
+      start_date: startDateTime,
+      end_date: endDateTime,
+      days: calculateDays(),
+      budget_type: formBudget,
+      total_destinations: totalDestinations,
+      estimated_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
+      itinerary_data: {
+        summary: {
+          total_days: calculateDays(),
+          total_destinations: totalDestinations,
+          estimated_total_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
+          highlights: generatedResult.summary.highlights || [],
+        },
+        // FIX UTAMA: Map days dengan jaminan 'slots' selalu ada
+        days: daysArray.map((day: any) => ({
+          day: day.day,
+          theme: day.theme || `Hari ${day.day}`,
+          // Jika day.slots undefined/null, jadikan array kosong []
+          // Kemudian map isinya biar formatnya rapi
+          slots: (day.slots || []).map((slot: any) => ({
+            content_id: slot.content_id || null,
+            title: slot.title || '',
+            time_slot: slot.time_slot || '08:00',
+            notes: slot.notes || '',
           }))
-        }
-      };
+        }))
+      }
+    };
 
-    console.log("SENDING PAYLOAD:", payload);
+    console.log("PAYLOAD FINAL:", payload); // Cek ini di console
 
     try {
       const token = localStorage.getItem('hamemayu_token');
@@ -410,24 +442,10 @@ export default function ItineraryPage() {
       });
 
       const data = await response.json();
-      console.log("RESPONSE:", data);
 
       if (!response.ok) {
-        const errors = data.errors || data.data?.errors || {};
-        const hasErrors = Object.keys(errors).length > 0;
-        
-        if (response.status === 422) {
-          if (hasErrors) {
-            const errorMessages = Object.values(errors).flat().join('\n');
-            console.error("VALIDATION ERRORS:", errors);
-            alert(`GAGAL MENYIMPAN ITINERARY\n\n${errorMessages}`);
-          } else {
-            console.error("VALIDATION FAILED (empty errors):", data);
-            alert(`GAGAL MENYIMPAN ITINERARY\n\n${data.message || 'Validasi gagal, cek console untuk detail'}`);
-          }
-        } else {
-          alert(`GAGAL MENYIMPAN ITINERARY\n\n${data.message || 'Unknown error'}`);
-        }
+        const errorMsg = data.message || 'Validasi gagal. Cek console.';
+        alert(`GAGAL MENYIMPAN ITINERARY\n\n${errorMsg}`);
         return;
       }
 
@@ -442,6 +460,7 @@ export default function ItineraryPage() {
       alert(`GAGAL MENYIMPAN: ${error.message}`);
     }
   };
+
 
   const handleViewDetail = async (id: number) => {
     setActiveTab('detail');
@@ -824,7 +843,7 @@ const handleAddDestinationWithTime = async () => {
   // 1. Tambah slot baru ke array
   newDays[dayIndex].slots.push(newSlot);
   
-  // ✅ 2. AUTO SORT: Urutkan berdasarkan time_slot (Jam terkecil di atas)
+  // 2. AUTO SORT: Urutkan berdasarkan time_slot (Jam terkecil di atas)
   newDays[dayIndex].slots.sort((a, b) => {
     const timeA = a.time_slot || '23:59'; // Fallback kalau kosong
     const timeB = b.time_slot || '23:59';
@@ -877,14 +896,17 @@ const addSelectedDestinations = () => {
       };
     });
 
-  // Dari search results (pakai ID dengan prefix)
+  // Dari search results (pakai key yang baru)
   const fromSearch = searchResults
-    .filter(dest => tempSelectedIds.has(`search-${dest.id}`))
+    .filter((dest, index) => {
+      const uniqueKey = `${dest.type || 'unknown'}-${dest.id}-${index}`;
+      return tempSelectedIds.has(uniqueKey);
+    })
     .map(dest => ({
       id: dest.id,
       title: dest.title,
       content_id: dest.id,
-      category: dest.category?.name || 'Umum',
+      category: dest.category?.name || (dest.type === 'event' ? 'Event' : 'Destinasi'),
       assigned_day: undefined,
       assigned_time: undefined,
     }));
@@ -895,9 +917,18 @@ const addSelectedDestinations = () => {
   const existingIds = new Set(manualDestinations.map(d => d.content_id));
   const uniqueNew = itemsToAdd.filter(d => !existingIds.has(d.content_id));
 
+  if (uniqueNew.length === 0) {
+    alert("Semua destinasi yang dipilih sudah ada di list!");
+    return;
+  }
+
   setManualDestinations(prev => [...prev, ...uniqueNew]);
   setTempSelectedIds(new Set());
+  setSearchQuery('');
+  setSearchResults([]);
   setShowDestinationPicker(false);
+  
+  alert(`${uniqueNew.length} destinasi berhasil ditambahkan!`);
 };
 
 
@@ -1649,34 +1680,70 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
           </div>
         </div>
 
-        {/* Search Section */}
-        <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-          <h4 className="font-bold text-sm mb-3">Cari dari Database</h4>
-          <input 
-            type="text" 
-            value={searchQuery} 
-            onChange={(e) => { setSearchQuery(e.target.value); searchDestinations(e.target.value); }} 
-            placeholder="Cari destinasi..." 
-            className="w-full p-3 border rounded-xl mb-3 bg-white dark:bg-slate-800" 
-          />
-          <div className="space-y-2">
-            {searchResults.map((dest: any) => {
-              const isSelected = tempSelectedIds.has(`search-${dest.id}`);
+{/* Search Section */}
+<div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
+  <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+    Cari dari Database
+  </h4>
+  
+  <input 
+    type="text" 
+    value={searchQuery} 
+    onChange={(e) => { 
+      setSearchQuery(e.target.value); 
+      searchDestinations(e.target.value); 
+    }} 
+    placeholder="Ketik nama destinasi atau event..." 
+    className="w-full p-3 border border-slate-300 dark:border-slate-700 rounded-xl mb-3 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+  />
+  
+  {/* Loading Indicator */}
+  {searchQuery && searchResults.length === 0 && (
+    <div className="text-center py-4 text-slate-500 text-sm">
+      Mencari destinasi...
+    </div>
+  )}
+  
+          {/* Search Results */}
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+          {searchResults.map((dest: any, index: number) => {
+              // Bikin key unik dengan kombinasi type + id + index
+              const uniqueKey = `${dest.type || 'unknown'}-${dest.id}-${index}`;
+              const isSelected = tempSelectedIds.has(uniqueKey);
               
               return (
                 <div 
-                  key={`search-${dest.id}`} 
-                  onClick={() => toggleTempSelect(`search-${dest.id}`)}
+                  key={uniqueKey}  // Sekarang pasti unik!
+                  onClick={() => toggleTempSelect(uniqueKey)}
                   className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
                     isSelected 
                       ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' 
                       : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
                   }`}
                 >
-                  <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 accent-blue-600" />
+                  <input 
+                    type="checkbox" 
+                    checked={isSelected} 
+                    readOnly 
+                    className="w-4 h-4 accent-blue-600" 
+                  />
                   <div className="flex-1">
-                    <p className="font-bold text-sm">{dest.title}</p>
-                    <p className="text-xs text-slate-500">{dest.category?.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-sm text-slate-900 dark:text-white">{dest.title}</p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                        dest.type === 'event' 
+                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' 
+                          : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                      }`}>
+                        {dest.category?.name || (dest.type === 'event' ? 'Event' : 'Destinasi')}
+                      </span>
+                    </div>
+                    {dest.excerpt && (
+                      <p className="text-xs text-slate-500 truncate">{dest.excerpt}</p>
+                    )}
                   </div>
                 </div>
               );
