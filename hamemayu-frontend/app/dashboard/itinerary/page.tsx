@@ -111,6 +111,10 @@ export default function ItineraryPage() {
   const [editingSlot, setEditingSlot] = useState<{dayIndex: number, slotIndex: number} | null>(null);
   const [wishlistForEdit, setWishlistForEdit] = useState<any[]>([]);
 
+  const [showTimeInputModal, setShowTimeInputModal] = useState(false);
+  const [pendingWishlistItem, setPendingWishlistItem] = useState<any>(null);
+  const [customTime, setCustomTime] = useState('08:00');
+
   useEffect(() => {
     if (activeTab !== 'list' && activeTab !== 'detail') return;
     
@@ -766,37 +770,78 @@ const replaceSlotFromWishlist = async (wishlistItem: any) => {
   
   const newDays = [...editableDays];
   const { dayIndex, slotIndex } = editingSlot;
-  
-  // Ambil data asli dari object content/plannable
   const actualData = wishlistItem.content || wishlistItem.plannable || wishlistItem;
   
-  // Buat object slot baru
+  // ✅ KALAU MODE TAMBAH, TANYA JAM DULU PAKE CUSTOM MODAL
+  if (slotIndex === -1) {
+    setPendingWishlistItem(wishlistItem);
+    setShowTimeInputModal(true);
+    return; // Stop dulu, lanjut di custom modal
+  }
+  
+  // MODE GANTI (langsung proses)
   const newSlot = {
     content_id: actualData.id,
     title: actualData.title || wishlistItem.title || 'Destinasi Baru',
-    // Kalau mode tambah (-1), default jam 08:00. Kalau mode edit, pakai jam lama.
-    time_slot: slotIndex === -1 ? '08:00' : newDays[dayIndex].slots[slotIndex].time_slot,
+    time_slot: newDays[dayIndex].slots[slotIndex].time_slot,
     notes: wishlistItem.notes || '',
   };
-
-  if (slotIndex === -1) {
-    // MODE TAMBAH: Push ke array
-    newDays[dayIndex].slots.push(newSlot);
-    alert(`"${actualData.title}" berhasil ditambahkan ke Hari ${dayIndex + 1}!`);
-  } else {
-    // MODE GANTI: Replace slot yang ada
-    newDays[dayIndex].slots[slotIndex] = newSlot;
-    alert(`Slot berhasil diganti dengan "${actualData.title}"!`);
-  }
+  
+  newDays[dayIndex].slots[slotIndex] = newSlot;
   
   setEditableDays(newDays);
   setShowEditSlotModal(false);
   setEditingSlot(null);
   
-  // Auto-save ke backend
   await handleUpdateDetail({ 
     itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } 
   });
+  
+  alert(`Slot berhasil diganti dengan "${actualData.title}"!`);
+};
+
+// Handler untuk custom time input modal
+const handleAddDestinationWithTime = async () => {
+  if (!pendingWishlistItem || !editingSlot || !editableDays) return;
+  
+  const newDays = [...editableDays];
+  const { dayIndex } = editingSlot;
+  const actualData = pendingWishlistItem.content || pendingWishlistItem.plannable || pendingWishlistItem;
+  
+  // Validasi format waktu
+  if (!/^\d{1,2}:\d{2}$/.test(customTime)) {
+    alert("Format jam tidak valid! Gunakan HH:MM (contoh: 14:30)");
+    return;
+  }
+  
+  const newSlot = {
+    content_id: actualData.id,
+    title: actualData.title || pendingWishlistItem.title || 'Destinasi Baru',
+    time_slot: customTime,
+    notes: pendingWishlistItem.notes || '',
+  };
+  
+  // 1. Tambah slot baru ke array
+  newDays[dayIndex].slots.push(newSlot);
+  
+  // ✅ 2. AUTO SORT: Urutkan berdasarkan time_slot (Jam terkecil di atas)
+  newDays[dayIndex].slots.sort((a, b) => {
+    const timeA = a.time_slot || '23:59'; // Fallback kalau kosong
+    const timeB = b.time_slot || '23:59';
+    return timeA.localeCompare(timeB);
+  });
+  
+  setEditableDays(newDays);
+  setShowEditSlotModal(false);
+  setShowTimeInputModal(false);
+  setEditingSlot(null);
+  setPendingWishlistItem(null);
+  
+  await handleUpdateDetail({ 
+    itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } 
+  });
+  
+  alert(`"${actualData.title}" berhasil ditambahkan ke Hari ${dayIndex + 1}!`);
 };
 
 //  State untuk multi-select sementara di modal
@@ -1864,6 +1909,46 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
     </div>
   </div>
 )}
+
+
+    {/* USTOM MODAL: Input Waktu */}
+    {showTimeInputModal && (
+      <div className="fixed inset-0 z-[1001] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowTimeInputModal(false)}>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-700 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+            Tentukan Waktu Kunjungan
+          </h3>
+          
+          <div className="mb-6">
+            <label className="block font-mono text-xs font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase">
+              Jam Berapa Anda Ingin Berkunjung?
+            </label>
+            <input
+              type="time"
+              value={customTime}
+              onChange={(e) => setCustomTime(e.target.value)}
+              className="w-full p-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              step="300" // 5 menit interval
+            />
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowTimeInputModal(false)}
+              className="flex-1 px-4 py-3 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-xs font-bold rounded-xl uppercase hover:bg-slate-300 dark:hover:bg-slate-700 transition-all"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleAddDestinationWithTime}
+              className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-mono text-xs font-bold rounded-xl uppercase transition-all shadow-lg"
+            >
+              Tambah Destinasi
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
