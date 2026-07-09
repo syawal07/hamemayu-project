@@ -825,6 +825,41 @@ const calculateActualDestinations = (item: ItineraryHistory): number => {
   return item.days * 2 || 0; // Asumsi 2 destinasi per hari
 };
 
+// Cek status itinerary berdasarkan tanggal
+const getItineraryStatus = (startDate: string | undefined, endDate: string | undefined) => {
+  if (!startDate || !endDate) return { status: 'unknown', label: 'Tidak Ada Tanggal', color: 'gray' };
+  
+  const now = new Date();
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  if (now > end) {
+    return { 
+      status: 'completed', 
+      label: 'SELESAI', 
+      color: 'slate',
+      bgColor: 'bg-slate-100 dark:bg-slate-800',
+      textColor: 'text-slate-600 dark:text-slate-400'
+    };
+  } else if (now >= start && now <= end) {
+    return { 
+      status: 'ongoing', 
+      label: 'BERLANGSUNG', 
+      color: 'green',
+      bgColor: 'bg-green-100 dark:bg-green-900/30',
+      textColor: 'text-green-700 dark:text-green-400'
+    };
+  } else {
+    return { 
+      status: 'upcoming', 
+      label: 'AKAN DATANG', 
+      color: 'blue',
+      bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+      textColor: 'text-blue-700 dark:text-blue-400'
+    };
+  }
+};
+
 
 
   return (
@@ -1012,7 +1047,7 @@ const calculateActualDestinations = (item: ItineraryHistory): number => {
     ) : historyList.length > 0 ? (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {historyList.map(item => {
-          // Hitung hari dengan fallback
+          // Hitung hari & destinasi (code sebelumnya)
           let displayDays = item.days || 0;
           if (item.start_date && item.end_date) {
             try {
@@ -1027,41 +1062,30 @@ const calculateActualDestinations = (item: ItineraryHistory): number => {
             }
           }
           
-          // Hitung destinasi dengan fallback
           let displayDestinations = 0;
-          
-          // Coba ambil dari itinerary_data kalau ada
           if ('itinerary_data' in item && (item as any).itinerary_data?.days) {
             const days = (item as any).itinerary_data.days;
             displayDestinations = days.reduce((acc: number, day: any) => {
               return acc + (day.slots?.length || 0);
             }, 0);
           } else {
-            // Fallback: pakai total_destinations dari item
             displayDestinations = item.total_destinations || 0;
           }
           
+          // Cek status itinerary
+          const status = getItineraryStatus(item.start_date, item.end_date);
+          
           return (
-            <div key={item.id} className="bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group">
+            <div key={item.id} className={`bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group ${status.status === 'completed' ? 'opacity-75' : ''}`}>
               
-              {/* Tombol Hapus */}
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteItinerary(item.id);
-                }}
-                className="absolute top-4 right-4 p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-900/50"
-                title="Hapus Itinerary"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+              {/* Badge Status */}
+              <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-widest ${status.bgColor} ${status.textColor}`}>
+                {status.label}
+              </div>
 
-              <h3 className="font-serif text-xl font-bold mb-3 pr-8">{item.title}</h3>
+              <h3 className="font-serif text-xl font-bold mb-3 pr-32">{item.title}</h3>
               
-              
-              {/* Display */}
+              {/* Info */}
               <div className="space-y-2 mb-4">
                 {/* Jumlah Hari */}
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
@@ -1082,7 +1106,7 @@ const calculateActualDestinations = (item: ItineraryHistory): number => {
               
               {/* Tanggal Range */}
               {item.start_date && item.end_date ? (
-                <div className="text-xs text-slate-500 dark:text-slate-400 mb-4 font-mono">
+                <div className={`text-xs font-mono mb-4 ${status.status === 'completed' ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {new Date(item.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} - 
                   {new Date(item.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </div>
@@ -1090,9 +1114,14 @@ const calculateActualDestinations = (item: ItineraryHistory): number => {
               
               <button 
                 onClick={() => handleViewDetail(item.id)} 
-                className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 rounded-xl font-mono text-xs font-bold uppercase mt-2 hover:opacity-90 transition-opacity"
+                className={`w-full py-3 rounded-xl font-mono text-xs font-bold uppercase mt-2 transition-opacity ${
+                  status.status === 'completed' 
+                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed' 
+                    : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90'
+                }`}
+                disabled={status.status === 'completed'}
               >
-                LIHAT DETAIL
+                {status.status === 'completed' ? 'SUDAH SELESAI' : 'LIHAT DETAIL'}
               </button>
             </div>
           );
