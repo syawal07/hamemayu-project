@@ -5,7 +5,7 @@ import { fetchAPI } from '../../lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
 
-// ✅ UPDATE INTERFACE: Handle plannable OR content
+// UPDATE INTERFACE: Handle plannable OR content
 interface WishlistItem {
   id: number;
   notes: string | null;
@@ -39,7 +39,7 @@ export default function WishlistPage() {
       if (isMounted) setLoading(true);
       try {
         const res = await fetchAPI<any>('/wishlist', { requireAuth: true });
-        // ✅ Handle response format baru: { success: true, data: [...] }
+        // Handle response format baru: { success: true, data: [...] }
         const data = res?.data || res || [];
         if (Array.isArray(data) && isMounted) setWishlists(data);
       } catch (error) { console.error(error); }
@@ -67,12 +67,12 @@ export default function WishlistPage() {
     } catch (error) { console.error(error); }
   };
 
-  // ✅ HELPER: Ambil data item (prioritaskan plannable)
+  // HELPER: Ambil data item (prioritaskan plannable)
   const getItemData = (item: WishlistItem) => {
     const data = item.plannable || item.content;
     if (!data) return null;
     
-    // ✅ FIX: Handle image URL untuk event vs content
+    // FIX: Handle image URL untuk event vs content
     let imageUrl = data.image || data.cover_image;
     
     // Kalau image relatif path (nggak mulai dengan http), tambahkan storage URL
@@ -129,7 +129,7 @@ export default function WishlistPage() {
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2 drop-shadow-sm">
-            Pangkalan Wishlist
+            Daftar Wishlist
           </h1>
           <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
             Manajemen Target Destinasi Personal
