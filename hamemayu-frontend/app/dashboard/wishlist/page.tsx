@@ -5,7 +5,7 @@ import { fetchAPI } from '../../lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
 
-// UPDATE INTERFACE: Handle plannable OR content
+// UPDATE INTERFACE
 interface WishlistItem {
   id: number;
   notes: string | null;
@@ -32,6 +32,10 @@ interface WishlistItem {
 export default function WishlistPage() {
   const [wishlists, setWishlists] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // STATE UNTUK INLINE EDIT
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draftNote, setDraftNote] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -39,7 +43,6 @@ export default function WishlistPage() {
       if (isMounted) setLoading(true);
       try {
         const res = await fetchAPI<any>('/wishlist', { requireAuth: true });
-        // Handle response format baru: { success: true, data: [...] }
         const data = res?.data || res || [];
         if (Array.isArray(data) && isMounted) setWishlists(data);
       } catch (error) { console.error(error); }
@@ -48,6 +51,41 @@ export default function WishlistPage() {
     loadWishlists();
     return () => { isMounted = false; };
   }, []);
+
+  // FUNGSI START EDIT
+  const startEditing = (item: WishlistItem) => {
+    setEditingId(item.id);
+    setDraftNote(item.notes || '');
+  };
+
+  // FUNGSI SAVE NOTE
+  const saveNote = async (item: WishlistItem) => {
+    // Cegah save jika konten sama
+    if (item.notes === draftNote) {
+      setEditingId(null);
+      return;
+    }
+
+    try {
+      await fetchAPI(`/wishlist/${item.id}`, {
+        method: 'PUT', 
+        requireAuth: true,
+        body: JSON.stringify({ 
+          notes: draftNote, 
+          visited: item.visited, // Kirim data lain juga biar aman
+          priority: item.priority 
+        })
+      });
+      
+      // Update state lokal
+      setWishlists(prev => prev.map(w => w.id === item.id ? { ...w, notes: draftNote } : w));
+    } catch (error) { 
+      console.error(error); 
+      alert("Gagal menyimpan catatan!");
+    } finally {
+      setEditingId(null);
+    }
+  };
 
   const handleDelete = async (id: number) => {
     if (!confirm('HAPUS DATA INI DARI PANGKALAN WISHLIST?')) return;
@@ -67,19 +105,14 @@ export default function WishlistPage() {
     } catch (error) { console.error(error); }
   };
 
-  // HELPER: Ambil data item (prioritaskan plannable)
+  // Helper data item
   const getItemData = (item: WishlistItem) => {
     const data = item.plannable || item.content;
     if (!data) return null;
-    
-    // FIX: Handle image URL untuk event vs content
     let imageUrl = data.image || data.cover_image;
-    
-    // Kalau image relatif path (nggak mulai dengan http), tambahkan storage URL
     if (imageUrl && !imageUrl.startsWith('http')) {
       imageUrl = `http://localhost/storage/${imageUrl}`;
     }
-    
     return {
       id: data.id,
       slug: data.slug,
@@ -91,36 +124,25 @@ export default function WishlistPage() {
   };
 
   const navigateToItem = async (item: WishlistItem) => {
-    const itemData = getItemData(item);
-    if (!itemData) return;
-    
+    // Logic navigasi (sama seperti sebelumnya)
     try {
       const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
-      const destinations = await extractWishlistCoords([{ ...item, content: { ...item.content, title: itemData.title } }]);
+      const destinations = await extractWishlistCoords([item]);
       if (destinations.length === 0) {
-        alert(`Koordinat untuk "${itemData.title}" belum tersedia.`);
+        alert(`Koordinat untuk "${item.plannable?.title || item.content?.title}" belum tersedia.`);
         return;
       }
       window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
-    } catch (err) {
-      console.error("Nav item failed:", err);
-      alert("Gagal membuka peta.");
-    }
+    } catch (err) { console.error("Nav item failed:", err); alert("Gagal membuka peta."); }
   };
 
   const navigateAll = async () => {
     try {
       const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
       const destinations = await extractWishlistCoords(wishlists);
-      if (destinations.length === 0) {
-        alert("Tidak ada destinasi dengan koordinat valid di wishlist.");
-        return;
-      }
+      if (destinations.length === 0) { alert("Tidak ada destinasi dengan koordinat."); return; }
       window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
-    } catch (err) {
-      console.error("Nav all failed:", err);
-      alert("Gagal memuat data peta.");
-    }
+    } catch (err) { console.error("Nav all failed:", err); alert("Gagal memuat peta."); }
   };
 
   return (
@@ -129,7 +151,7 @@ export default function WishlistPage() {
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2 drop-shadow-sm">
-            Daftar Wishlist
+            Pangkalan Wishlist
           </h1>
           <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
             Manajemen Target Destinasi Personal
@@ -143,10 +165,7 @@ export default function WishlistPage() {
 
       {wishlists.length > 0 && (
         <div className="mb-6 flex justify-end">
-          <button
-            onClick={navigateAll}
-            className="inline-flex items-center gap-2 bg-green-700 dark:bg-yellow-400 text-white dark:text-slate-900 font-mono text-xs font-bold px-6 py-3 rounded-xl hover:bg-green-800 dark:hover:bg-yellow-500 transition-all shadow-sm active:scale-95 uppercase tracking-wide"
-          >
+          <button onClick={navigateAll} className="inline-flex items-center gap-2 bg-green-700 dark:bg-yellow-400 text-white dark:text-slate-900 font-mono text-xs font-bold px-6 py-3 rounded-xl hover:bg-green-800 dark:hover:bg-yellow-500 transition-all shadow-sm active:scale-95 uppercase tracking-wide">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 3V4m0 0L9 7" />
             </svg>
@@ -162,26 +181,17 @@ export default function WishlistPage() {
           {wishlists.map(item => {
             const itemData = getItemData(item);
             if (!itemData) return null;
-            
+            const isEditing = editingId === item.id;
+
             return (
               <div key={item.id} className={`flex flex-col sm:flex-row bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-xl border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.04)] rounded-3xl p-2.5 transition-all duration-500 group ${item.visited ? 'opacity-80' : 'hover:shadow-[0_12px_40px_rgba(15,28,53,0.08)] hover:-translate-y-1'}`}>
                 
                 <div className="relative w-full sm:w-56 h-48 sm:h-auto rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 shrink-0">
-                {itemData.image ? (
-                  <div className={`absolute inset-0 w-full h-full transition-transform duration-700 ease-out group-hover:scale-105 ${item.visited ? 'grayscale opacity-80' : ''}`}>
-                    <Image 
-                      src={itemData.image} 
-                      alt={itemData.title} 
-                      fill 
-                      className="object-cover" 
-                      unoptimized 
-                      onError={(e) => {
-                        // Fallback kalau gambar error
-                        (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
-                      }}
-                    />
-                  </div>
-                ) : (
+                  {itemData.image ? (
+                    <div className={`absolute inset-0 w-full h-full transition-transform duration-700 ease-out group-hover:scale-105 ${item.visited ? 'grayscale opacity-80' : ''}`}>
+                      <Image src={itemData.image} alt={itemData.title} fill className="object-cover" unoptimized />
+                    </div>
+                  ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center font-mono text-[10px] text-slate-400 uppercase tracking-widest">
                       <svg className="w-8 h-8 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                       [ NO_IMAGE ]
@@ -205,18 +215,40 @@ export default function WishlistPage() {
                         {itemData.category || 'UMUM'}
                       </span>
                     </div>
-                    <div className="bg-slate-50/50 dark:bg-slate-800/30 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50 mb-6">
-                      <p className="font-mono text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                        <span className="font-bold text-slate-800 dark:text-slate-200">Catatan:</span> {item.notes || 'Tidak ada catatan tambahan untuk destinasi ini.'}
-                      </p>
-                    </div>
+
+                    {/* INLINE EDIT CATATAN */}
+                    {isEditing ? (
+                      <div className="mb-6 relative group/edit">
+                        <textarea
+                          value={draftNote}
+                          onChange={(e) => setDraftNote(e.target.value)}
+                          onBlur={() => saveNote(item)}
+                          onKeyDown={(e) => {
+                            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') saveNote(item);
+                          }}
+                          autoFocus
+                          className="w-full p-3 text-xs bg-slate-50 dark:bg-slate-800/50 border border-green-500 dark:border-green-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 resize-none font-mono text-slate-600 dark:text-slate-400 min-h-[80px] leading-relaxed shadow-sm"
+                          placeholder="Tulis catatan di sini (Ctrl+Enter untuk simpan)..."
+                        />
+                        <div className="absolute bottom-2 right-3 text-[9px] text-slate-400 font-mono pointer-events-none">
+                          Auto-save saat klik luar • Ctrl+Enter
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        onClick={() => startEditing(item)}
+                        className="bg-slate-50/50 dark:bg-slate-800/30 p-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-green-500 dark:hover:border-green-500 transition-colors cursor-text group/note mb-6 min-h-[50px] flex items-center"
+                      >
+                        <p className="font-mono text-xs text-slate-600 dark:text-slate-400 leading-relaxed break-words w-full">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 group-hover/note:text-green-600 dark:group-hover/note:text-green-400 transition-colors mr-2">Catatan:</span> 
+                          {item.notes || <span className="italic text-slate-400">Klik untuk tambah catatan...</span>}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 mt-auto">
-                    <button 
-                      onClick={() => navigateToItem(item)}
-                      className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40"
-                    >
+                    <button onClick={() => navigateToItem(item)} className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                       NAVIGASI
                     </button>
