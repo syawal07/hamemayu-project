@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation'; // IMPORT ROUTER
 import { fetchAPI } from '../../lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
 
-// UPDATE INTERFACE
 interface WishlistItem {
   id: number;
   notes: string | null;
@@ -18,7 +18,7 @@ interface WishlistItem {
     category: string | { name: string };
     image: string | null;
     cover_image?: string | null;
-    type: string;
+    type: string; // 'App\Models\Event' or 'App\Models\Content'
   };
   content?: {
     id: number;
@@ -30,10 +30,9 @@ interface WishlistItem {
 }
 
 export default function WishlistPage() {
+  const router = useRouter(); // INIT ROUTER
   const [wishlists, setWishlists] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // STATE UNTUK INLINE EDIT
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftNote, setDraftNote] = useState('');
 
@@ -52,39 +51,40 @@ export default function WishlistPage() {
     return () => { isMounted = false; };
   }, []);
 
-  // FUNGSI START EDIT
+  // FUNGSI: NAVIGASI KE DETAIL (EVENT ATAU DESTINASI)
+  const handleCardClick = (item: WishlistItem) => {
+    const itemData = getItemData(item);
+    if (!itemData || !itemData.slug) return;
+
+    // Cek tipe item
+    const isEvent = item.plannable?.type === 'App\\Models\\Event';
+    
+    if (isEvent) {
+      router.push(`/dashboard/events/${itemData.slug}`);
+    } else {
+      // Default ke destinasi
+      router.push(`/dashboard/destinasi/${itemData.slug}`);
+    }
+  };
+
   const startEditing = (item: WishlistItem) => {
     setEditingId(item.id);
     setDraftNote(item.notes || '');
   };
 
-  // FUNGSI SAVE NOTE
   const saveNote = async (item: WishlistItem) => {
-    // Cegah save jika konten sama
     if (item.notes === draftNote) {
       setEditingId(null);
       return;
     }
-
     try {
       await fetchAPI(`/wishlist/${item.id}`, {
-        method: 'PUT', 
-        requireAuth: true,
-        body: JSON.stringify({ 
-          notes: draftNote, 
-          visited: item.visited, // Kirim data lain juga biar aman
-          priority: item.priority 
-        })
+        method: 'PUT', requireAuth: true,
+        body: JSON.stringify({ notes: draftNote, visited: item.visited, priority: item.priority })
       });
-      
-      // Update state lokal
       setWishlists(prev => prev.map(w => w.id === item.id ? { ...w, notes: draftNote } : w));
-    } catch (error) { 
-      console.error(error); 
-      alert("Gagal menyimpan catatan!");
-    } finally {
-      setEditingId(null);
-    }
+    } catch (error) { console.error(error); alert("Gagal menyimpan catatan!"); }
+    finally { setEditingId(null); }
   };
 
   const handleDelete = async (id: number) => {
@@ -105,7 +105,6 @@ export default function WishlistPage() {
     } catch (error) { console.error(error); }
   };
 
-  // Helper data item
   const getItemData = (item: WishlistItem) => {
     const data = item.plannable || item.content;
     if (!data) return null;
@@ -123,8 +122,8 @@ export default function WishlistPage() {
     };
   };
 
-  const navigateToItem = async (item: WishlistItem) => {
-    // Logic navigasi (sama seperti sebelumnya)
+  const navigateToItem = async (item: WishlistItem, e: React.MouseEvent) => {
+    e.stopPropagation(); // PENTING: Biar nggak trigger card click
     try {
       const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
       const destinations = await extractWishlistCoords([item]);
@@ -184,7 +183,12 @@ export default function WishlistPage() {
             const isEditing = editingId === item.id;
 
             return (
-              <div key={item.id} className={`flex flex-col sm:flex-row bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-xl border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.04)] rounded-3xl p-2.5 transition-all duration-500 group ${item.visited ? 'opacity-80' : 'hover:shadow-[0_12px_40px_rgba(15,28,53,0.08)] hover:-translate-y-1'}`}>
+              // CARD UTAMA: DIBUAT CLICKABLE
+              <div 
+                key={item.id} 
+                onClick={() => handleCardClick(item)}
+                className={`flex flex-col sm:flex-row bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-xl border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.04)] rounded-3xl p-2.5 transition-all duration-500 group cursor-pointer ${item.visited ? 'opacity-80' : 'hover:shadow-[0_12px_40px_rgba(15,28,53,0.08)] hover:-translate-y-1'}`}
+              >
                 
                 <div className="relative w-full sm:w-56 h-48 sm:h-auto rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 shrink-0">
                   {itemData.image ? (
@@ -208,7 +212,7 @@ export default function WishlistPage() {
                 <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
                     <div className="flex flex-col-reverse sm:flex-row sm:items-start justify-between gap-3 mb-2">
-                      <h3 className="font-serif text-2xl font-bold text-slate-900 dark:text-white leading-tight tracking-tight line-clamp-2">
+                      <h3 className="font-serif text-2xl font-bold text-slate-900 dark:text-white leading-tight tracking-tight line-clamp-2 group-hover:text-green-700 dark:group-hover:text-yellow-400 transition-colors">
                         {itemData.title}
                       </h3>
                       <span className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full font-mono text-[9px] font-bold uppercase tracking-widest whitespace-nowrap shadow-sm w-fit">
@@ -216,9 +220,8 @@ export default function WishlistPage() {
                       </span>
                     </div>
 
-                    {/* INLINE EDIT CATATAN */}
                     {isEditing ? (
-                      <div className="mb-6 relative group/edit">
+                      <div className="mb-6 relative group/edit" onClick={(e) => e.stopPropagation()}>
                         <textarea
                           value={draftNote}
                           onChange={(e) => setDraftNote(e.target.value)}
@@ -228,35 +231,33 @@ export default function WishlistPage() {
                           }}
                           autoFocus
                           className="w-full p-3 text-xs bg-slate-50 dark:bg-slate-800/50 border border-green-500 dark:border-green-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 resize-none font-mono text-slate-600 dark:text-slate-400 min-h-[80px] leading-relaxed shadow-sm"
-                          placeholder="Tulis catatan di sini (Ctrl+Enter untuk simpan)..."
+                          placeholder="Tulis catatan di sini..."
                         />
-                        <div className="absolute bottom-2 right-3 text-[9px] text-slate-400 font-mono pointer-events-none">
-                          Auto-save saat klik luar • Ctrl+Enter
-                        </div>
                       </div>
                     ) : (
                       <div 
-                        onClick={() => startEditing(item)}
+                        onClick={(e) => { e.stopPropagation(); startEditing(item); }}
                         className="bg-slate-50/50 dark:bg-slate-800/30 p-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-green-500 dark:hover:border-green-500 transition-colors cursor-text group/note mb-6 min-h-[50px] flex items-center"
                       >
                         <p className="font-mono text-xs text-slate-600 dark:text-slate-400 leading-relaxed break-words w-full">
-                          <span className="font-bold text-slate-800 dark:text-slate-200 group-hover/note:text-green-600 dark:group-hover/note:text-green-400 transition-colors mr-2">Catatan:</span> 
+                          <span className="font-bold text-slate-800 dark:text-slate-200 mr-2">📝 Catatan:</span> 
                           {item.notes || <span className="italic text-slate-400">Klik untuk tambah catatan...</span>}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 mt-auto">
-                    <button onClick={() => navigateToItem(item)} className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40">
+                  {/* TOMBOL BUTTONS: PAKAI stopPropagation */}
+                  <div className="flex flex-wrap items-center gap-3 mt-auto" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={(e) => navigateToItem(item, e)} className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                       NAVIGASI
                     </button>
-                    <button onClick={() => toggleVisited(item)} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm ${item.visited ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                    <button onClick={(e) => { e.stopPropagation(); toggleVisited(item); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm ${item.visited ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={item.visited ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"} /></svg>
                       {item.visited ? 'TERKUNJUNGI' : 'TANDAI SELESAI'}
                     </button>
-                    <button onClick={() => handleDelete(item.id)} className="px-5 py-2.5 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 font-mono text-xs font-bold border border-red-200 dark:border-red-900/50 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all uppercase flex items-center gap-2 shadow-sm">
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }} className="px-5 py-2.5 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 font-mono text-xs font-bold border border-red-200 dark:border-red-900/50 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all uppercase flex items-center gap-2 shadow-sm">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       <span className="hidden sm:inline">HAPUS</span>
                     </button>
