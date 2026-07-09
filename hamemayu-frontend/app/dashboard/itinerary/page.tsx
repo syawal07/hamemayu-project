@@ -117,18 +117,15 @@ export default function ItineraryPage() {
     const loadHistory = async () => {
       setLoading(true);
       try {
-        // Fetch list basic info
         const res = await fetchAPI<ItineraryHistory[]>('/itinerary/history', { requireAuth: true });
         
         if (res && Array.isArray(res)) {
-          // Fetch detail untuk setiap itinerary biar dapet start_date, end_date, dll
           const detailedHistory = await Promise.all(
             res.map(async (item) => {
               try {
                 const detail = await fetchAPI<ItineraryDetail>(`/itinerary/history/${item.id}`, { requireAuth: true });
                 
                 if (detail) {
-                  // Merge basic info dengan detail
                   return {
                     ...item,
                     start_date: detail.start_date,
@@ -140,10 +137,29 @@ export default function ItineraryPage() {
                 return item;
               } catch (error) {
                 console.error(`Failed to fetch detail for itinerary ${item.id}:`, error);
-                return item; // Fallback ke basic info
+                return item;
               }
             })
           );
+          
+          // ✅ SORT: Yang paling dekat dengan hari ini duluan
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // Reset waktu ke tengah malam
+          
+          detailedHistory.sort((a, b) => {
+            // Prioritaskan start_date, fallback ke created_at
+            const dateA = a.start_date ? new Date(a.start_date) : new Date(a.created_at || 0);
+            const dateB = b.start_date ? new Date(b.start_date) : new Date(b.created_at || 0);
+            
+            // Hitung jarak absolut dari hari ini (dalam hari)
+            const diffTimeA = Math.abs(dateA.getTime() - today.getTime());
+            const diffTimeB = Math.abs(dateB.getTime() - today.getTime());
+            const diffDaysA = Math.ceil(diffTimeA / (1000 * 60 * 60 * 24));
+            const diffDaysB = Math.ceil(diffTimeB / (1000 * 60 * 60 * 24));
+            
+            // Yang paling dekat dengan hari ini = urutan pertama
+            return diffDaysA - diffDaysB;
+          });
           
           setHistoryList(detailedHistory);
         }
@@ -859,8 +875,6 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
     };
   }
 };
-
-
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12">
