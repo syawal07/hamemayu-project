@@ -29,12 +29,16 @@ class AuthController extends Controller
             /** @var \Laravel\Socialite\Two\User $googleUser */
             $googleUser = $driver->stateless()->user();
 
+            $avatarUrl = !empty($googleUser->avatar) 
+                ? $googleUser->avatar 
+                : 'https://ui-avatars.com/api/?name=' . urlencode($googleUser->name) . '&background=0D8ABC&color=fff';
+
             $user = User::updateOrCreate(
                 ['google_id' => $googleUser->id],
                 [
                     'name' => $googleUser->name,
                     'email' => $googleUser->email,
-                    'avatar' => $googleUser->avatar,
+                    'avatar' => $avatarUrl,
                     'password' => Hash::make(uniqid()),
                 ]
             );

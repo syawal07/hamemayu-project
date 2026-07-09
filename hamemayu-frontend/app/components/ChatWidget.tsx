@@ -145,8 +145,8 @@ export default function ChatWidget() {
               />
             </div>
             <div className="flex flex-col text-left">
-              <span className="font-mono text-[10px] text-slate-500 uppercase">ASISTEN_AI</span>
-              <span className="font-serif text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider">CHAT_MAYU</span>
+              <span className="font-mono text-[10px] text-slate-500 uppercase">ASISTEN AI</span>
+              <span className="font-serif text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider">CHAT MAYU</span>
             </div>
           </div>
         )}
@@ -158,7 +158,7 @@ export default function ChatWidget() {
           <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 p-4 border-b-2 border-slate-900 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse border border-slate-900"></div>
-              <h3 className="font-serif font-bold text-lg uppercase tracking-widest">HALOMAYU_AI</h3>
+              <h3 className="font-serif font-bold text-lg uppercase tracking-widest">HALOMAYU AI</h3>
             </div>
           </div>
 

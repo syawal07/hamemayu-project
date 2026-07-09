@@ -28,7 +28,7 @@ export default async function LoginPage() {
         <div className="w-full lg:w-5/12 flex flex-col justify-center px-6 sm:px-12 lg:px-20 py-12 lg:py-0 relative z-10 bg-white/50 dark:bg-brutal-dark/50 backdrop-blur-2xl border-r border-white/60 dark:border-slate-700/50 shadow-[16px_0_40px_-10px_rgba(15,28,53,0.05)] overflow-y-auto">        
         <Link href="/" className="fixed top-6 left-6 sm:top-8 sm:left-12 lg:absolute lg:left-16 font-mono text-slate-600 dark:text-slate-400 hover:text-green-800 dark:hover:text-yellow-400 flex items-center gap-2 transition-all duration-300 hover:-translate-x-1 text-xs font-bold uppercase tracking-widest bg-white/40 dark:bg-slate-800/40 backdrop-blur-md px-5 py-2.5 border border-white/50 dark:border-slate-700/50 rounded-full shadow-sm z-100">
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-      KEMBALI_
+      KEMBALI
     </Link>
 
         {/* Mendorong form ke bawah menggunakan mt-24 pada mobile */}
@@ -90,7 +90,7 @@ export default async function LoginPage() {
           <div className="absolute bottom-8 left-8 z-20">
             <div className="bg-white/30 dark:bg-brutal-dark/50 backdrop-blur-xl font-mono border border-white/40 dark:border-slate-700/50 px-5 py-2.5 text-white text-xs font-bold uppercase tracking-widest shadow-[0_4px_16px_rgba(0,0,0,0.2)] rounded-2xl flex items-center gap-3 transform group-hover:-translate-y-1 transition-transform duration-500">
               <span className="w-2.5 h-2.5 rounded-full bg-green-400 dark:bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.6)] dark:shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
-              SYSTEM_ID: {settings?.site_name || 'HAMEMAYU'}
+              SYSTEM ID: {settings?.site_name || 'HAMEMAYU'}
             </div>
           </div>
 

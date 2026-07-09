@@ -114,9 +114,10 @@ export default function MapComponent({ markers, center, focusSlug, routeDestinat
   // ✅ GPS Tracking dengan Throttling
   useEffect(() => {
     if (!("geolocation" in navigator)) {
-      setGpsStatus('ditolak');
+      Promise.resolve().then(() => setGpsStatus('ditolak'));
       return;
     }
+  
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -149,10 +150,13 @@ export default function MapComponent({ markers, center, focusSlug, routeDestinat
   useEffect(() => {
     // Reset route kalau destinations kosong
     if (!routeDestinations || routeDestinations.length === 0) {
-      setRouteCoordinates([]);
-      setRouteInfo(null);
+      Promise.resolve().then(() => {
+        setRouteCoordinates([]);
+        setRouteInfo(null);
+      });
       return;
     }
+  
 
     const fetchRoute = async () => {
       // ✅ Throttle: hanya recalculate kalau user bergerak signifikan ATAU first load
@@ -216,14 +220,14 @@ export default function MapComponent({ markers, center, focusSlug, routeDestinat
           const data = await res.json();
           if (data.routes && data.routes.length > 0) {
             const route = data.routes[0];
-            setRouteCoordinates(route.geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]));
+        setRouteCoordinates(route.geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]));
 
             const steps: RouteStep[] = [];
             let totalDistance = 0;
             let totalDuration = 0;
 
-            route.legs?.forEach((leg: any) => {
-              leg.steps?.forEach((step: any) => {
+            route.legs?.forEach((leg: { steps?: Array<{ distance?: number; duration?: number; name?: string; maneuver?: { instruction?: string } }> }) => {
+              leg.steps?.forEach((step: { distance?: number; duration?: number; name?: string; maneuver?: { instruction?: string } }) => {
                 steps.push({
                   instruction: step.maneuver?.instruction || 'Lanjutkan',
                   distance: step.distance || 0,

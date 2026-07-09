@@ -31,7 +31,7 @@ export default function GoogleLoginButton() {
       className="w-full flex items-center justify-center gap-4 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md text-slate-900 dark:text-yellow-400 font-mono font-bold py-4 px-6 border-2 border-slate-900 dark:border-yellow-400 shadow-[4px_4px_0_0_rgba(15,28,53,1)] dark:shadow-[4px_4px_0_0_rgba(250,204,21,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0_0_rgba(15,28,53,1)] dark:hover:shadow-[6px_6px_0_0_rgba(250,204,21,1)] active:translate-y-0 active:translate-x-0 active:shadow-none transition-all disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-[4px_4px_0_0_rgba(15,28,53,1)] dark:disabled:hover:shadow-[4px_4px_0_0_rgba(250,204,21,1)]"
     >
       {isLoading ? (
-        <span className="animate-pulse">MEMUAT_SISTEM...</span>
+        <span className="animate-pulse">MEMUAT SISTEM...</span>
       ) : (
         <>
           <svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-sm">

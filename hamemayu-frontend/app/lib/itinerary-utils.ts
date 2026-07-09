@@ -7,19 +7,44 @@ export type DestWithCoords = {
   content_id?: number;
 };
 
-/**
- * Extract koordinat dari Wishlist.
- * Fallback: Jika location tidak ada di response, fetch dari /map-markers via content_id.
- */
-export async function extractWishlistCoords(wishlist: any[]): Promise<DestWithCoords[]> {
-  console.log('🔍 WISHLIST DEBUG - Full data:', wishlist);
-  
+export interface MapMarker {
+  id: number;
+  lat: number | null;
+  lng: number | null;
+  title: string;
+}
+
+export interface WishlistItem {
+  content?: {
+    id: number;
+    title: string;
+    location?: {
+      lat: number;
+      lng: number;
+    };
+  };
+}
+
+export interface ItinerarySlot {
+  content_id?: number;
+  title?: string;
+}
+
+export interface ItineraryDay {
+  slots?: ItinerarySlot[];
+}
+
+export interface ItineraryData {
+  itinerary_data?: {
+    days?: ItineraryDay[];
+  };
+}
+
+export async function extractWishlistCoords(wishlist: WishlistItem[]): Promise<DestWithCoords[]> {
   if (!Array.isArray(wishlist)) {
-    console.error('❌ Wishlist bukan array!');
     return [];
   }
   
-  // 1. Cek apakah ada item yang PUNYA location langsung
   const itemsWithLocation = wishlist.flatMap((item) => {
     const content = item.content;
     if (!content) return [];
@@ -35,61 +60,45 @@ export async function extractWishlistCoords(wishlist: any[]): Promise<DestWithCo
     return [];
   });
 
-  // Kalau semua item sudah punya lokasi, return langsung
   if (itemsWithLocation.length === wishlist.length) {
-    console.log('✅ Semua item punya lokasi lokal.');
     return itemsWithLocation;
   }
 
-  // 2. Fallback: Ambil content_id dari item yang TIDAK punya lokasi
   const missingIds = wishlist
     .filter(item => !item.content?.location?.lat || !item.content?.location?.lng)
     .map(item => item.content?.id)
-    .filter(Boolean);
+    .filter((id): id is number => id !== undefined);
 
   if (missingIds.length === 0) {
     return itemsWithLocation;
   }
 
-  console.log(`⚠️ ${missingIds.length} item nggak punya lokasi. Fetching /map-markers...`);
-
   try {
-    const markers: any[] = await fetchAPI('/map-markers');
+    const markers = await fetchAPI<MapMarker[]>('/map-markers') || [];
     
     const fallbackCoords = markers
-      .filter(m => missingIds.includes(m.id) && m.lat && m.lng)
+      .filter(m => missingIds.includes(m.id) && m.lat !== null && m.lng !== null)
       .map(m => ({
-        lat: m.lat,
-        lng: m.lng,
+        lat: m.lat as number,
+        lng: m.lng as number,
         title: m.title,
         content_id: m.id,
       }));
 
-    const result = [...itemsWithLocation, ...fallbackCoords];
-    console.log('✅ HASIL FINAL EXTRACT:', result);
-    return result;
-
+    return [...itemsWithLocation, ...fallbackCoords];
   } catch (err) {
-    console.error('❌ Failed to fetch map markers for fallback:', err);
     return itemsWithLocation;
   }
 }
 
-/**
- * Extract koordinat dari Itinerary.
- * PRIORITY: content_id → Fallback: match by title
- */
 export async function extractItineraryCoords(
-  itinerary: any
+  itinerary: ItineraryData
 ): Promise<DestWithCoords[]> {
-  console.log('🔍 ITINERARY DEBUG - Full data:', itinerary);
-  
-  // 1. Kumpulkan content_id DAN title dari semua slots
   const contentIds: number[] = [];
   const slotTitles: string[] = [];
   
-  itinerary.itinerary_data?.days?.forEach((day: any) => {
-    day.slots?.forEach((slot: any) => {
+  itinerary.itinerary_data?.days?.forEach((day) => {
+    day.slots?.forEach((slot) => {
       if (slot.content_id) {
         contentIds.push(slot.content_id);
       }
@@ -99,26 +108,18 @@ export async function extractItineraryCoords(
     });
   });
 
-  console.log('Content IDs yang ditemukan:', contentIds);
-  console.log('Slot titles yang ditemukan:', slotTitles);
-
   if (contentIds.length === 0 && slotTitles.length === 0) {
-    console.warn('⚠️ Nggak ada content_id atau title di itinerary');
     return [];
   }
 
   try {
-    // 2. Fetch semua map markers
-    console.log('📡 Fetching /map-markers...');
-    const markers: any[] = await fetchAPI('/map-markers');
-    console.log('Map markers:', markers);
+    const markers = await fetchAPI<MapMarker[]>('/map-markers') || [];
     
     const result: DestWithCoords[] = [];
     const usedMarkerIds = new Set<number>();
 
-    // 3. PRIORITAS 1: Match by content_id
     markers.forEach(marker => {
-      if (contentIds.includes(marker.id) && marker.lat && marker.lng) {
+      if (contentIds.includes(marker.id) && marker.lat !== null && marker.lng !== null) {
         result.push({
           lat: marker.lat,
           lng: marker.lng,
@@ -129,11 +130,9 @@ export async function extractItineraryCoords(
       }
     });
 
-    // 4. PRIORITAS 2: Fallback - Match by title (case-insensitive)
     slotTitles.forEach(slotTitle => {
-      // Cari marker yang title-nya cocok (abaikan case & spasi berlebih)
       const matchedMarker = markers.find(marker => {
-        if (usedMarkerIds.has(marker.id)) return false; // Jangan pakai yang udah dipakai
+        if (usedMarkerIds.has(marker.id)) return false;
         
         const markerTitle = marker.title.toLowerCase().trim();
         const searchTitle = slotTitle.toLowerCase().trim();
@@ -141,7 +140,7 @@ export async function extractItineraryCoords(
         return markerTitle === searchTitle || markerTitle.includes(searchTitle) || searchTitle.includes(markerTitle);
       });
 
-      if (matchedMarker && matchedMarker.lat && matchedMarker.lng) {
+      if (matchedMarker && matchedMarker.lat !== null && matchedMarker.lng !== null) {
         result.push({
           lat: matchedMarker.lat,
           lng: matchedMarker.lng,
@@ -149,17 +148,12 @@ export async function extractItineraryCoords(
           content_id: matchedMarker.id,
         });
         usedMarkerIds.add(matchedMarker.id);
-        console.log(`✅ Match by title: "${slotTitle}" → "${matchedMarker.title}"`);
-      } else {
-        console.warn(`⚠️ Nggak ketemu marker untuk title: "${slotTitle}"`);
       }
     });
 
-    console.log('✅ HASIL FINAL EXTRACT ITINERARY:', result);
     return result;
     
   } catch (err) {
-    console.error('❌ Failed to fetch map markers:', err);
     return [];
   }
 }
