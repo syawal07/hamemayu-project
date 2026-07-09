@@ -1,19 +1,24 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import type { Event } from '../../types/event';
 import Image from 'next/image';
 
 interface EventCardProps {
   event: Event;
+  id?: string;
   onAddToWishlist?: (event: Event) => void;
   onAddToItinerary?: (event: Event) => void;
 }
 
 export default function EventCard({ 
   event, 
+  id,
   onAddToWishlist, 
   onAddToItinerary 
 }: EventCardProps) {
+  const router = useRouter();
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('id-ID', { 
@@ -31,10 +36,30 @@ export default function EventCard({
     }).format(price);
   };
 
+  // ✅ NAVIGASI KE DETAIL
+  const handleCardClick = () => {
+    router.push(`/dashboard/events/${event.slug}`);
+  };
+
+  // ✅ STOP PROPAGATION UNTUK BUTTON AKSI
+  const handleWishlistClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAddToWishlist?.(event);
+  };
+
+  const handleItineraryClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAddToItinerary?.(event);
+  };
+
   return (
-    <div className="group bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+    <div 
+      id={id}
+      onClick={handleCardClick} // ✅ KLIK CARD = NAVIGASI
+      className="group bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+    >
       {/* Image */}
-      <div className="relative h-40 bg-slate-200 dark:bg-slate-800">
+      <div className="relative h-40 bg-slate-200 dark:bg-slate-800 overflow-hidden">
         {event.image ? (
           <Image 
             src={event.image} 
@@ -80,16 +105,16 @@ export default function EventCard({
           </span>
         </div>
 
-        {/* Price */}
+        {/* Price & Actions */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
           <span className={`font-bold text-sm ${event.ticket_price === 0 ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'}`}>
             {formatPrice(event.ticket_price)}
           </span>
           
-          {/* Action Buttons */}
+          {/* Action Buttons - STOP PROPAGATION */}
           <div className="flex gap-1.5">
             <button 
-              onClick={() => onAddToWishlist?.(event)}
+              onClick={handleWishlistClick}
               className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
               title="Tambah ke Wishlist"
             >
@@ -98,7 +123,7 @@ export default function EventCard({
               </svg>
             </button>
             <button 
-              onClick={() => onAddToItinerary?.(event)}
+              onClick={handleItineraryClick}
               className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               title="Tambah ke Itinerary"
             >
