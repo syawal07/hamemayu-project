@@ -114,6 +114,7 @@ export default function ItineraryPage() {
   const [showTimeInputModal, setShowTimeInputModal] = useState(false);
   const [pendingWishlistItem, setPendingWishlistItem] = useState<any>(null);
   const [customTime, setCustomTime] = useState('08:00');
+  const [selectedDatabaseItems, setSelectedDatabaseItems] = useState<Map<string, any>>(new Map());
 
   useEffect(() => {
     if (activeTab !== 'list' && activeTab !== 'detail') return;
@@ -223,24 +224,24 @@ export default function ItineraryPage() {
     }
     
     try {
-      // Tambah { requireAuth: true } biar token dikirim
+      // Fetch dari Contents (Destinasi) dengan auth
       const contentsRes = await fetchAPI(`/contents?search=${query}&limit=20`, { requireAuth: true });
       const contents = contentsRes?.data || contentsRes || [];
       
-      // Tambah { requireAuth: true } juga di sini
+      // Fetch dari Events dengan auth
       const eventsRes = await fetchAPI(`/events?search=${query}&limit=20`, { requireAuth: true });
       const events = eventsRes?.data || eventsRes || [];
       
-      // Gabungkan hasil
+      // Gabungkan hasil dengan property 'type' yang jelas
       const allResults = [
         ...contents.map((item: any) => ({
           ...item,
-          type: 'destination',
+          type: 'destination', // Label untuk Destinasi
           category: item.category || { name: 'Destinasi' },
         })),
         ...events.map((item: any) => ({
           ...item,
-          type: 'event',
+          type: 'event', // Label untuk Event
           category: item.category || { name: 'Event' },
         })),
       ];
@@ -879,6 +880,19 @@ const toggleTempSelect = (index: number) => {
   });
 };
 
+// Toggle untuk search results (database)
+const toggleDatabaseSelection = (key: string, item: any) => {
+  setSelectedDatabaseItems(prev => {
+    const next = new Map(prev);
+    if (next.has(key)) {
+      next.delete(key); // Uncheck
+    } else {
+      next.set(key, item); // Check - simpan whole item
+    }
+    return next;
+  });
+};
+
 // Tambahkan semua yang dicentang sekaligus (PAKAI INDEX)
 const addSelectedDestinations = () => {
   // Dari wishlist (pakai index)
@@ -896,20 +910,15 @@ const addSelectedDestinations = () => {
       };
     });
 
-  // Dari search results (pakai key yang baru)
-  const fromSearch = searchResults
-    .filter((dest, index) => {
-      const uniqueKey = `${dest.type || 'unknown'}-${dest.id}-${index}`;
-      return tempSelectedIds.has(uniqueKey);
-    })
-    .map(dest => ({
-      id: dest.id,
-      title: dest.title,
-      content_id: dest.id,
-      category: dest.category?.name || (dest.type === 'event' ? 'Event' : 'Destinasi'),
-      assigned_day: undefined,
-      assigned_time: undefined,
-    }));
+  // ✅ Dari database search (pakai Map yang baru)
+  const fromSearch = Array.from(selectedDatabaseItems.values()).map(dest => ({
+    id: dest.id,
+    title: dest.title,
+    content_id: dest.id,
+    category: dest.category?.name || (dest.type === 'event' ? 'Event' : 'Destinasi'),
+    assigned_day: undefined,
+    assigned_time: undefined,
+  }));
 
   const itemsToAdd = [...fromWishlist, ...fromSearch];
 
@@ -923,7 +932,10 @@ const addSelectedDestinations = () => {
   }
 
   setManualDestinations(prev => [...prev, ...uniqueNew]);
+  
+  // Reset selections
   setTempSelectedIds(new Set());
+  setSelectedDatabaseItems(new Map()); // ✅ Clear map
   setSearchQuery('');
   setSearchResults([]);
   setShowDestinationPicker(false);
@@ -1707,64 +1719,78 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
     </div>
   )}
   
-          {/* Search Results */}
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-          {searchResults.map((dest: any, index: number) => {
-              // Bikin key unik dengan kombinasi type + id + index
-              const uniqueKey = `${dest.type || 'unknown'}-${dest.id}-${index}`;
-              const isSelected = tempSelectedIds.has(uniqueKey);
-              
-              return (
-                <div 
-                  key={uniqueKey}  // Sekarang pasti unik!
-                  onClick={() => toggleTempSelect(uniqueKey)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    isSelected 
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <input 
-                    type="checkbox" 
-                    checked={isSelected} 
-                    readOnly 
-                    className="w-4 h-4 accent-blue-600" 
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-bold text-sm text-slate-900 dark:text-white">{dest.title}</p>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        dest.type === 'event' 
-                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' 
-                          : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      }`}>
-                        {dest.category?.name || (dest.type === 'event' ? 'Event' : 'Destinasi')}
-                      </span>
-                    </div>
-                    {dest.excerpt && (
-                      <p className="text-xs text-slate-500 truncate">{dest.excerpt}</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+{/* Search Results */}
+<div className="space-y-2 max-h-64 overflow-y-auto">
+  {searchResults.map((dest: any) => {
+    const uniqueKey = `search-${dest.type || 'content'}-${dest.id}`;
+    const isSelected = selectedDatabaseItems.has(uniqueKey);
+    
+    return (
+      <div 
+        key={uniqueKey}
+        onClick={() => toggleDatabaseSelection(uniqueKey, dest)}
+        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+          isSelected 
+            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' 
+            : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
+        }`}
+      >
+        <input 
+          type="checkbox" 
+          checked={isSelected} 
+          readOnly 
+          className="w-4 h-4 accent-blue-600" 
+        />
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-bold text-sm text-slate-900 dark:text-white">{dest.title}</p>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              dest.type === 'event' 
+                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' 
+                : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+            }`}>
+              {dest.category?.name || (dest.type === 'event' ? 'Event' : 'Destinasi')}
+            </span>
           </div>
+          {dest.excerpt && (
+            <p className="text-xs text-slate-500 truncate">{dest.excerpt}</p>
+          )}
+        </div>
+      </div>
+    );
+  })}
+</div>
         </div>
       </div>
 
-      {/* Footer Action */}
-      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-        <p className="text-sm text-slate-500">
-          {tempSelectedIds.size > 0 ? `${tempSelectedIds.size} destinasi dipilih` : 'Centang destinasi untuk menambahkan'}
-        </p>
-        <button 
-          onClick={addSelectedDestinations} 
-          disabled={tempSelectedIds.size === 0}
-          className="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-mono text-xs font-bold rounded-xl uppercase transition-all"
-        >
-          + TAMBAHKAN
-        </button>
-      </div>
+{/* Footer Action */}
+<div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+  <p className="text-sm text-slate-500">
+    {(() => {
+      // ✅ Hitung TOTAL seleksi (wishlist + database)
+      const wishlistCount = tempSelectedIds.size;
+      const databaseCount = selectedDatabaseItems.size;
+      const totalCount = wishlistCount + databaseCount;
+      
+      if (totalCount > 0) {
+        return `${totalCount} destinasi dipilih`;
+      }
+      return 'Centang destinasi untuk menambahkan';
+    })()}
+  </p>
+  
+  <button 
+    onClick={addSelectedDestinations} 
+    disabled={tempSelectedIds.size === 0 && selectedDatabaseItems.size === 0}
+    className={`px-6 py-2.5 font-mono text-xs font-bold rounded-xl uppercase transition-all ${
+      tempSelectedIds.size === 0 && selectedDatabaseItems.size === 0
+        ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+        : 'bg-green-600 hover:bg-green-700 text-white shadow-lg'
+    }`}
+  >
+    + TAMBAHKAN
+  </button>
+</div>
     </div>
   </div>
 )}
