@@ -142,7 +142,7 @@ export default function ItineraryPage() {
             })
           );
           
-          // ✅ SORT: Yang paling dekat dengan hari ini duluan
+          // SORT: Yang paling dekat dengan hari ini duluan
           const today = new Date();
           today.setHours(0, 0, 0, 0); // Reset waktu ke tengah malam
           
@@ -1059,88 +1059,208 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
     {loading ? (
       <div className="text-center py-20">Loading...</div>
     ) : historyList.length > 0 ? (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {historyList.map(item => {
-          // Hitung hari & destinasi (code sebelumnya)
-          let displayDays = item.days || 0;
-          if (item.start_date && item.end_date) {
-            try {
-              const start = new Date(item.start_date);
-              const end = new Date(item.end_date);
-              if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                const diffTime = Math.abs(end.getTime() - start.getTime());
-                displayDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-              }
-            } catch (e) {
-              console.error('Date parsing error:', e);
-            }
-          }
+      <div className="space-y-8">
+        
+        {/* ✅ SECTION 1: Itinerary Aktif & Akan Datang */}
+        {(() => {
+          const activeItineraries = historyList.filter(item => {
+            const status = getItineraryStatus(item.start_date, item.end_date);
+            return status.status !== 'completed';
+          });
           
-          let displayDestinations = 0;
-          if ('itinerary_data' in item && (item as any).itinerary_data?.days) {
-            const days = (item as any).itinerary_data.days;
-            displayDestinations = days.reduce((acc: number, day: any) => {
-              return acc + (day.slots?.length || 0);
-            }, 0);
-          } else {
-            displayDestinations = item.total_destinations || 0;
-          }
-          
-          // Cek status itinerary
-          const status = getItineraryStatus(item.start_date, item.end_date);
+          if (activeItineraries.length === 0) return null;
           
           return (
-              <div key={item.id} className={`bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group flex flex-col h-full ${status.status === 'completed' ? 'opacity-75' : ''}`}> 
-              {/* Badge Status */}
-              <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-widest ${status.bgColor} ${status.textColor}`}>
-                {status.label}
-              </div>
+            <div>
+              <h2 className="text-2xl font-serif font-bold text-slate-900 dark:text-white mb-6">
+                📋 Rencana Perjalanan Aktif
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeItineraries.map(item => {
+                  // ... (kode render card yang sama seperti sebelumnya) ...
+                  let displayDays = item.days || 0;
+                  if (item.start_date && item.end_date) {
+                    try {
+                      const start = new Date(item.start_date);
+                      const end = new Date(item.end_date);
+                      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                        const diffTime = Math.abs(end.getTime() - start.getTime());
+                        displayDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                      }
+                    } catch (e) {
+                      console.error('Date parsing error:', e);
+                    }
+                  }
+                  
+                  let displayDestinations = 0;
+                  if ('itinerary_data' in item && (item as any).itinerary_data?.days) {
+                    const days = (item as any).itinerary_data.days;
+                    displayDestinations = days.reduce((acc: number, day: any) => {
+                      return acc + (day.slots?.length || 0);
+                    }, 0);
+                  } else {
+                    displayDestinations = item.total_destinations || 0;
+                  }
+                  
+                  const status = getItineraryStatus(item.start_date, item.end_date);
+                  
+                  return (
+                    <div key={item.id} className={`bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group flex flex-col h-full ${status.status === 'completed' ? 'opacity-75' : ''}`}> 
+                      <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-widest ${status.bgColor} ${status.textColor}`}>
+                        {status.label}
+                      </div>
 
-              <div className="flex-1">
-              <h3 className="font-serif text-xl font-bold mb-3 pr-32">{item.title}</h3>
-              
-              {/* Info */}
-              <div className="space-y-2 mb-4">
-                {/* Jumlah Hari */}
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className="font-mono">{displayDays} Hari</span>
-                </div>
-                
-                {/* Jumlah Destinasi */}
-                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  </svg>
-                  <span className="font-mono">{displayDestinations} Destinasi</span>
-                </div>
+                      <div className="flex-1">
+                        <h3 className="font-serif text-xl font-bold mb-3 pr-32">{item.title}</h3>
+                        
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="font-mono">{displayDays} Hari</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            </svg>
+                            <span className="font-mono">{displayDestinations} Destinasi</span>
+                          </div>
+                        </div>
+                        
+                        {item.start_date && item.end_date ? (
+                          <div className={`text-xs font-mono mb-4 ${status.status === 'completed' ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                            {new Date(item.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} - 
+                            {new Date(item.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        ) : null}
+                      </div> 
+                      
+                      <button 
+                        onClick={() => handleViewDetail(item.id)} 
+                        className={`w-full py-3 rounded-xl font-mono text-xs font-bold uppercase mt-auto transition-opacity ${
+                          status.status === 'completed' 
+                            ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed' 
+                            : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90'
+                        }`}
+                        disabled={status.status === 'completed'}
+                      >
+                        {status.status === 'completed' ? 'SUDAH SELESAI' : 'LIHAT DETAIL'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-              
-              {/* Tanggal Range */}
-              {item.start_date && item.end_date ? (
-                <div className={`text-xs font-mono mb-4 ${status.status === 'completed' ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {new Date(item.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} - 
-                  {new Date(item.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </div>
-              ) : null}
-              </div> 
-              
-              <button 
-                onClick={() => handleViewDetail(item.id)} 
-                  className={`w-full py-3 rounded-xl font-mono text-xs font-bold uppercase mt-auto transition-opacity ${
-                  status.status === 'completed' 
-                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed' 
-                    : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90'
-                }`}
-                disabled={status.status === 'completed'}
-              >
-                {status.status === 'completed' ? 'SUDAH SELESAI' : 'LIHAT DETAIL'}
-              </button>
             </div>
           );
-        })}
+        })()}
+        
+        {/* ✅ GARIS PEMISAH (hanya muncul kalau ada itinerary selesai) */}
+        {(() => {
+          const completedItineraries = historyList.filter(item => {
+            const status = getItineraryStatus(item.start_date, item.end_date);
+            return status.status === 'completed';
+          });
+          
+          if (completedItineraries.length === 0) return null;
+          
+          return (
+            <div className="border-t-2 border-slate-200 dark:border-slate-700 my-8"></div>
+          );
+        })()}
+        
+        {/* ✅ SECTION 2: Itinerary Selesai */}
+        {(() => {
+          const completedItineraries = historyList.filter(item => {
+            const status = getItineraryStatus(item.start_date, item.end_date);
+            return status.status === 'completed';
+          });
+          
+          if (completedItineraries.length === 0) return null;
+          
+          return (
+            <div>
+              <h2 className="text-2xl font-serif font-bold text-slate-500 dark:text-slate-400 mb-6">
+                ✅ Riwayat Perjalanan Selesai
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {completedItineraries.map(item => {
+                  // ... (kode render card yang sama) ...
+                  let displayDays = item.days || 0;
+                  if (item.start_date && item.end_date) {
+                    try {
+                      const start = new Date(item.start_date);
+                      const end = new Date(item.end_date);
+                      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                        const diffTime = Math.abs(end.getTime() - start.getTime());
+                        displayDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                      }
+                    } catch (e) {
+                      console.error('Date parsing error:', e);
+                    }
+                  }
+                  
+                  let displayDestinations = 0;
+                  if ('itinerary_data' in item && (item as any).itinerary_data?.days) {
+                    const days = (item as any).itinerary_data.days;
+                    displayDestinations = days.reduce((acc: number, day: any) => {
+                      return acc + (day.slots?.length || 0);
+                    }, 0);
+                  } else {
+                    displayDestinations = item.total_destinations || 0;
+                  }
+                  
+                  const status = getItineraryStatus(item.start_date, item.end_date);
+                  
+                  return (
+                    <div key={item.id} className={`bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group flex flex-col h-full opacity-60`}> 
+                      <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-widest ${status.bgColor} ${status.textColor}`}>
+                        {status.label}
+                      </div>
+
+                      <div className="flex-1">
+                        <h3 className="font-serif text-xl font-bold mb-3 pr-32 text-slate-500 dark:text-slate-400">{item.title}</h3>
+                        
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="font-mono">{displayDays} Hari</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            </svg>
+                            <span className="font-mono">{displayDestinations} Destinasi</span>
+                          </div>
+                        </div>
+                        
+                        {item.start_date && item.end_date ? (
+                          <div className="text-xs font-mono mb-4 text-slate-400">
+                            {new Date(item.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} - 
+                            {new Date(item.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        ) : null}
+                      </div> 
+                      
+                      <button 
+                        onClick={() => handleViewDetail(item.id)} 
+                        className="w-full py-3 rounded-xl font-mono text-xs font-bold uppercase mt-auto bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                        disabled
+                      >
+                        SUDAH SELESAI
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+        
       </div>
     ) : (
       <div className="text-center py-20">
