@@ -1061,7 +1061,7 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
     ) : historyList.length > 0 ? (
       <div className="space-y-8">
         
-        {/* ✅ SECTION 1: Itinerary Aktif & Akan Datang */}
+        {/* SECTION 1: Itinerary Aktif & Akan Datang */}
         {(() => {
           const activeItineraries = historyList.filter(item => {
             const status = getItineraryStatus(item.start_date, item.end_date);
@@ -1073,7 +1073,7 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
           return (
             <div>
               <h2 className="text-2xl font-serif font-bold text-slate-900 dark:text-white mb-6">
-                📋 Rencana Perjalanan Aktif
+                Rencana Perjalanan Aktif
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeItineraries.map(item => {
@@ -1156,7 +1156,7 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
           );
         })()}
         
-        {/* ✅ GARIS PEMISAH (hanya muncul kalau ada itinerary selesai) */}
+        {/* GARIS PEMISAH (hanya muncul kalau ada itinerary selesai) */}
         {(() => {
           const completedItineraries = historyList.filter(item => {
             const status = getItineraryStatus(item.start_date, item.end_date);
@@ -1170,7 +1170,7 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
           );
         })()}
         
-        {/* ✅ SECTION 2: Itinerary Selesai */}
+        {/* SECTION 2: Itinerary Selesai */}
         {(() => {
           const completedItineraries = historyList.filter(item => {
             const status = getItineraryStatus(item.start_date, item.end_date);
@@ -1182,7 +1182,7 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
           return (
             <div>
               <h2 className="text-2xl font-serif font-bold text-slate-500 dark:text-slate-400 mb-6">
-                ✅ Riwayat Perjalanan Selesai
+                Perjalanan Selesai
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {completedItineraries.map(item => {
