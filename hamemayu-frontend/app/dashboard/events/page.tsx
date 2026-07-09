@@ -103,6 +103,105 @@ export default function EventsPage() {
     });
   };
 
+
+// Di dalam component EventsPage:
+
+// ✅ STATE: Track event yang udah di wishlist
+const [wishlistIds, setWishlistIds] = useState<number[]>([]);
+
+// ✅ FUNGSI: Load wishlist user saat page load
+const loadUserWishlist = useCallback(async () => {
+  try {
+    const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
+    
+    console.log('🔍 Loading wishlist...');
+    const res = await fetch(`${API_BASE}/wishlist`, {
+      headers: {
+        'Accept': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      }
+    });
+    
+    console.log('📥 Response status:', res.status);
+    
+    if (res.ok) {
+      const data = await res.json();
+      console.log('📦 Wishlist data:', data); // ✅ DEBUG LOG
+      
+      // Ambil ID dari plannable
+      const ids = data.data?.map((item: any) => {
+        return item.plannable?.id || item.content?.id;
+      }).filter(Boolean) || [];
+      
+      console.log('✅ Wishlist IDs:', ids);
+      setWishlistIds(ids);
+    }
+  } catch (err) {
+    console.error('Failed to load wishlist:', err);
+  }
+}, []);
+
+// ✅ FUNGSI: Add/Remove Wishlist
+const handleAddToWishlist = async (event: Event) => {
+  console.log('🎯 Adding to wishlist:', event); // ✅ DEBUG LOG
+  
+  try {
+    const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
+    
+    const isAlreadyIn = wishlistIds.includes(event.id);
+    console.log('🔄 Already in wishlist?', isAlreadyIn);
+    
+    const res = await fetch(`${API_BASE}/wishlist`, {
+      method: isAlreadyIn ? 'DELETE' : 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      body: JSON.stringify({
+        event_id: event.id
+      })
+    });
+    
+    console.log('📤 Response status:', res.status);
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      console.error('❌ API Error:', errorData);
+      throw new Error(errorData.message || 'Gagal update wishlist');
+    }
+    
+    // Update state lokal
+    if (isAlreadyIn) {
+      setWishlistIds(prev => prev.filter(id => id !== event.id));
+      alert(`❌ ${event.title} dihapus dari wishlist`);
+    } else {
+      setWishlistIds(prev => [...prev, event.id]);
+      alert(`✅ ${event.title} ditambahkan ke wishlist!`);
+    }
+  } catch (err: any) {
+    console.error('Wishlist error:', err);
+    alert('❌ Gagal: ' + err.message);
+  }
+};
+
+// ✅ LOAD WISHLIST SAAT COMPONENT MOUNT
+useEffect(() => {
+  loadUserWishlist();
+}, [loadUserWishlist]);
+
+// Di bagian render EventCard:
+{eventsList.map(event => (
+  <EventCard 
+    key={event.id}
+    id={`event-${event.id}`}
+    event={event}
+    isWishlisted={wishlistIds.includes(event.id)} // ✅ PASS STATUS
+    onAddToWishlist={handleAddToWishlist} // ✅ PASS FUNCTION
+    onAddToItinerary={() => console.log('Itinerary:', event.slug)}
+  />
+))}
+
   return (
     <div className="space-y-6 pb-8">
       {/* Header Section */}
@@ -172,14 +271,16 @@ export default function EventsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {eventsList.map(event => (
+          {eventsList.map(event => (
             <EventCard 
-                key={event.id}  // ✅ WAJIB: unique key untuk setiap item di map
-                event={event} 
-                onAddToWishlist={() => console.log('Wishlist:', event.slug)}
-                onAddToItinerary={() => console.log('Itinerary:', event.slug)}
+              key={event.id}
+              id={`event-${event.id}`}
+              event={event}
+              isWishlisted={wishlistIds.includes(event.id)} // ✅ PASS STATUS WISHLIST
+              onAddToWishlist={() => handleAddToWishlist(event)} // ✅ PASS FUNCTION ACTUAL
+              onAddToItinerary={(event) => console.log('Itinerary:', event.slug)}
             />
-            ))}
+          ))}
           </div>
         )}
       </section>

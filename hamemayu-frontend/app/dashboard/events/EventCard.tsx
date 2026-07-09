@@ -7,6 +7,7 @@ import Image from 'next/image';
 interface EventCardProps {
   event: Event;
   id?: string;
+  isWishlisted?: boolean;
   onAddToWishlist?: (event: Event) => void;
   onAddToItinerary?: (event: Event) => void;
 }
@@ -14,6 +15,7 @@ interface EventCardProps {
 export default function EventCard({ 
   event, 
   id,
+  isWishlisted = false,
   onAddToWishlist, 
   onAddToItinerary 
 }: EventCardProps) {
@@ -113,15 +115,22 @@ export default function EventCard({
           
           {/* Action Buttons - STOP PROPAGATION */}
           <div className="flex gap-1.5">
-            <button 
-              onClick={handleWishlistClick}
-              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-              title="Tambah ke Wishlist"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </button>
+          <button 
+    onClick={(e) => {
+      e.stopPropagation(); // Biar nggak trigger navigasi card
+      onAddToWishlist?.(event);
+    }}
+    className={`p-2 rounded-lg transition-colors ${
+      isWishlisted 
+        ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' 
+        : 'hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-600 dark:hover:text-red-400'
+    }`}
+    title={isWishlisted ? "Hapus dari Wishlist" : "Tambah ke Wishlist"}
+  >
+    <svg className="w-4 h-4" fill={isWishlisted ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    </svg>
+  </button>
             <button 
               onClick={handleItineraryClick}
               className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"

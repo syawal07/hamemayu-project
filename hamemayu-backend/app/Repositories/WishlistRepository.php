@@ -9,18 +9,41 @@ class WishlistRepository implements WishlistRepositoryInterface
 {
     public function getUserWishlists(int $userId)
     {
-        return Wishlist::query()
-            ->with(['content.category'])
-            ->where('user_id', '=', $userId)
-            ->orderBy('priority', 'desc')
+        return Wishlist::where('user_id', $userId)
+            ->with(['content.category', 'plannable']) // ✅ Load kedua relasi
             ->latest()
             ->get();
     }
 
     public function createWishlist(int $userId, array $data)
     {
-        $data['user_id'] = $userId;
-        return Wishlist::create($data);
+        // HANDLE EVENT_ID (Polymorphic)
+        if (!empty($data['event_id'])) {
+            return Wishlist::create([
+                'user_id' => $userId,
+                'content_id' => null,
+                'plannable_type' => 'App\Models\Event',
+                'plannable_id' => $data['event_id'],
+                'notes' => $data['notes'] ?? null,
+                'visited' => $data['visited'] ?? false,
+                'priority' => $data['priority'] ?? 1,
+            ]);
+        }
+        
+        // HANDLE CONTENT_ID (Logic Lama)
+        if (!empty($data['content_id'])) {
+            return Wishlist::create([
+                'user_id' => $userId,
+                'content_id' => $data['content_id'],
+                'plannable_type' => 'App\Models\Content',
+                'plannable_id' => $data['content_id'],
+                'notes' => $data['notes'] ?? null,
+                'visited' => $data['visited'] ?? false,
+                'priority' => $data['priority'] ?? 1,
+            ]);
+        }
+        
+        throw new \Exception('Invalid wishlist data: content_id or event_id required');
     }
 
     public function updateWishlist(int $id, int $userId, array $data)
@@ -32,18 +55,14 @@ class WishlistRepository implements WishlistRepositoryInterface
             
         $wishlist->update($data);
         
-        return $wishlist->load('content.category');
+        return $wishlist->load('content.category', 'plannable');
     }
 
     public function deleteWishlist(int $id, int $userId)
     {
-        Wishlist::query()
-            ->where('id', '=', $id)
-            ->where('user_id', '=', $userId)
-            ->firstOrFail();
-            
         return Wishlist::query()
             ->where('id', '=', $id)
+            ->where('user_id', '=', $userId)
             ->delete();
     }
 

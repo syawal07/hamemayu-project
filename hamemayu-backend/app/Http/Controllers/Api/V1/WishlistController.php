@@ -15,23 +15,76 @@ class WishlistController extends Controller
     public function index(Request $request)
     {
         $wishlists = $this->wishlistRepository->getUserWishlists($request->user()->id);
-
+        
+        // FORMAT RESPONSE AGAR FRONTEND MUDAH PAKAI
+        $formattedData = $wishlists->map(function($wishlist) {
+            $item = [
+                'id' => $wishlist->id,
+                'user_id' => $wishlist->user_id,
+                'notes' => $wishlist->notes,
+                'visited' => $wishlist->visited,
+                'priority' => $wishlist->priority,
+                'created_at' => $wishlist->created_at,
+                'updated_at' => $wishlist->updated_at,
+            ];
+            
+            // Ambil data dari polymorphic relation (prioritas)
+            if ($wishlist->plannable) {
+                $item['plannable'] = [
+                    'id' => $wishlist->plannable->id,
+                    'title' => $wishlist->plannable->title,
+                    'slug' => $wishlist->plannable->slug ?? null,
+                    'image' => $wishlist->plannable->image ?? $wishlist->plannable->cover_image ?? null,
+                    'category' => $wishlist->plannable->category?->name ?? $wishlist->plannable->category ?? null,
+                    'type' => get_class($wishlist->plannable),
+                ];
+            } elseif ($wishlist->content) {
+                // Fallback untuk backward compatibility
+                $item['plannable'] = [
+                    'id' => $wishlist->content->id,
+                    'title' => $wishlist->content->title,
+                    'slug' => $wishlist->content->slug,
+                    'image' => $wishlist->content->cover_image ?? null,
+                    'category' => $wishlist->content->category?->name ?? null,
+                    'type' => 'App\Models\Content',
+                ];
+            }
+            
+            return $item;
+        });
+    
         return response()->json([
             'success' => true,
-            'data' => $wishlists
+            'data' => $formattedData
         ]);
     }
 
+
+
     public function store(Request $request)
     {
+        // VALIDASI POLYMORPHIC
         $data = $request->validate([
-            'content_id' => 'required|exists:contents,id',
+            'content_id' => 'nullable|exists:contents,id',
+            'event_id'   => 'nullable|exists:events,id',
             'notes' => 'nullable|string',
             'visited' => 'boolean',
             'priority' => 'integer'
         ]);
 
-        $wishlist = $this->wishlistRepository->createWishlist($request->user()->id, $data);
+        // Pastikan salah satu ada
+        if (empty($data['content_id']) && empty($data['event_id'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'content_id atau event_id harus diisi.'
+            ], 422);
+        }
+
+        // PASS userId KE REPOSITORY
+        $wishlist = $this->wishlistRepository->createWishlist(
+            $request->user()->id, // userId parameter pertama
+            $data                 // data parameter kedua
+        );
 
         return response()->json([
             'success' => true,
