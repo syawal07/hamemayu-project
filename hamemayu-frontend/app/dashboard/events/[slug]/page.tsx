@@ -13,7 +13,13 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // ✅ STATE: Track wishlist status
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistId, setWishlistId] = useState<number | null>(null);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
+  // ✅ FUNGSI: Load event detail
   useEffect(() => {
     const fetchEvent = async () => {
       try {
@@ -38,6 +44,101 @@ export default function EventDetailPage() {
 
     fetchEvent();
   }, [slug]);
+
+  // ✅ FUNGSI: Check wishlist status pas event udah load
+  useEffect(() => {
+    if (!event) return;
+    
+    const checkWishlist = async () => {
+      try {
+        const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
+        
+        const res = await fetch(`${API_BASE}/wishlist`, {
+          headers: {
+            'Accept': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          const wishlistData = data.data || data;
+          
+          // Cari apakah event ini udah di wishlist
+          const found = wishlistData.find((item: any) => {
+            const plannableId = item.plannable?.id || item.content?.id;
+            return plannableId === event.id;
+          });
+          
+          if (found) {
+            setIsWishlisted(true);
+            setWishlistId(found.id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check wishlist:', err);
+      }
+    };
+    
+    checkWishlist();
+  }, [event]);
+
+  // ✅ FUNGSI: Toggle wishlist (Add/Remove)
+  const handleToggleWishlist = async () => {
+    if (!event || wishlistLoading) return;
+    
+    setWishlistLoading(true);
+    
+    try {
+      const token = document.cookie.split('; ').find(row => row.startsWith('hamemayu_token='))?.split('=')[1];
+      
+      let res;
+      if (isWishlisted && wishlistId) {
+        // ✅ REMOVE dari wishlist
+        res = await fetch(`${API_BASE}/wishlist/${wishlistId}`, {
+          method: 'DELETE',
+          headers: {
+            'Accept': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          }
+        });
+      } else {
+        // ✅ ADD ke wishlist
+        res = await fetch(`${API_BASE}/wishlist`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          },
+          body: JSON.stringify({ event_id: event.id })
+        });
+      }
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Gagal update wishlist');
+      }
+      
+      // Update state
+      if (isWishlisted) {
+        setIsWishlisted(false);
+        setWishlistId(null);
+        alert(` ${event.title} dihapus dari wishlist`);
+      } else {
+        const responseData = await res.json();
+        setIsWishlisted(true);
+        setWishlistId(responseData.data?.id);
+        alert(`✅ ${event.title} ditambahkan ke wishlist!`);
+      }
+      
+    } catch (err: any) {
+      console.error('Wishlist error:', err);
+      alert(' Gagal: ' + err.message);
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -181,7 +282,7 @@ export default function EventDetailPage() {
             </div>
           )}
 
-          {/* Action Buttons */}
+          {/* ✅ ACTION BUTTONS - WISHLIST SEKARANG FUNCTIONAL */}
           <div className="flex gap-4">
             {event.ticket_link && (
               <a 
@@ -193,8 +294,25 @@ export default function EventDetailPage() {
                 🎟️ Beli Tiket
               </a>
             )}
-            <button className="flex-1 py-3 px-6 border-2 border-green-700 dark:border-yellow-400 text-green-700 dark:text-yellow-400 font-bold rounded-xl hover:bg-green-50 dark:hover:bg-yellow-400/10 transition">
-              ❤️ Tambah ke Wishlist
+            <button 
+              onClick={handleToggleWishlist}
+              disabled={wishlistLoading}
+              className={`flex-1 py-3 px-6 border-2 font-bold rounded-xl transition flex items-center justify-center gap-2 ${
+                isWishlisted 
+                  ? 'bg-red-500 border-red-500 text-white hover:bg-red-600' 
+                  : 'border-green-700 dark:border-yellow-400 text-green-700 dark:text-yellow-400 hover:bg-green-50 dark:hover:bg-yellow-400/10'
+              } ${wishlistLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {wishlistLoading ? (
+                <span className="animate-pulse">Memproses...</span>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill={isWishlisted ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  {isWishlisted ? 'Di Wishlist' : 'Tambah ke Wishlist'}
+                </>
+              )}
             </button>
           </div>
         </div>
