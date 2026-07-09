@@ -124,15 +124,73 @@ export default function WishlistPage() {
 
   const navigateToItem = async (item: WishlistItem, e: React.MouseEvent) => {
     e.stopPropagation(); // PENTING: Biar nggak trigger card click
+    
     try {
-      const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
-      const destinations = await extractWishlistCoords([item]);
-      if (destinations.length === 0) {
-        alert(`Koordinat untuk "${item.plannable?.title || item.content?.title}" belum tersedia.`);
+      // Ambil data item yang udah di-fix URL-nya
+      const itemData = getItemData(item);
+      if (!itemData || !itemData.id) {
+        alert("Data destinasi tidak valid.");
         return;
       }
-      window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
-    } catch (err) { console.error("Nav item failed:", err); alert("Gagal membuka peta."); }
+  
+      // Fetch semua markers dari database peta
+      const markers: any[] = await fetchAPI('/map-markers');
+      
+      if (!Array.isArray(markers)) {
+        alert("Gagal memuat data peta.");
+        return;
+      }
+  
+      let matchedMarker = null;
+  
+      // PRIORITAS 1: Match by content_id / plannable_id
+      if (itemData.id) {
+        matchedMarker = markers.find(m => m.id === itemData.id);
+      }
+  
+      // PRIORITAS 2: Fallback - Match by title (case-insensitive)
+      if (!matchedMarker && itemData.title) {
+        const searchTitle = itemData.title.toLowerCase().trim();
+        matchedMarker = markers.find(marker => {
+          const markerTitle = marker.title?.toLowerCase().trim();
+          return markerTitle === searchTitle || 
+                 markerTitle?.includes(searchTitle) || 
+                 searchTitle.includes(markerTitle || '');
+        });
+      }
+  
+      if (!matchedMarker) {
+        alert(`Destinasi "${itemData.title}" tidak ditemukan di database peta.
+  
+  Kemungkinan:
+  1. Destinasi belum ditambahkan ke database peta
+  2. Nama berbeda dengan yang di database`);
+        return;
+      }
+  
+      // Parse koordinat (handle string atau number)
+      const lat = typeof matchedMarker.lat === 'string' ? parseFloat(matchedMarker.lat) : matchedMarker.lat;
+      const lng = typeof matchedMarker.lng === 'string' ? parseFloat(matchedMarker.lng) : matchedMarker.lng;
+  
+      if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+        const destination = {
+          lat: lat,
+          lng: lng,
+          title: matchedMarker.title || itemData.title,
+          content_id: matchedMarker.id,
+        };
+        
+        // Buka peta dengan format yang sama kayak itinerary
+        const routeParam = encodeURIComponent(JSON.stringify([destination]));
+        window.location.href = `/dashboard/peta?route=${routeParam}`;
+      } else {
+        alert(`Koordinat "${matchedMarker.title}" belum tersedia di database.`);
+      }
+      
+    } catch (err: any) {
+      console.error("Navigation error:", err);
+      alert(`Gagal membuka peta: ${err.message || 'Unknown error'}`);
+    }
   };
 
   const navigateAll = async () => {
