@@ -1767,7 +1767,7 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
 <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
   <p className="text-sm text-slate-500">
     {(() => {
-      // ✅ Hitung TOTAL seleksi (wishlist + database)
+      // Hitung TOTAL seleksi (wishlist + database)
       const wishlistCount = tempSelectedIds.size;
       const databaseCount = selectedDatabaseItems.size;
       const totalCount = wishlistCount + databaseCount;
@@ -1918,61 +1918,7 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
                 {/* Tombol-tombol di kanan */}
                 <div className="flex gap-2">
                   {/* Tombol Peta */}
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const navTitle = item.content?.title || item.title;
-                      try {
-                        const markers: any[] = await fetchAPI('/map-markers');
-                        if (!Array.isArray(markers)) {
-                          alert("Gagal memuat data peta.");
-                          return;
-                        }
-                        let matchedMarker = null;
-                        if (item.content?.id) {
-                          matchedMarker = markers.find(m => m.id === item.content.id);
-                        }
-                        if (!matchedMarker && navTitle) {
-                          const searchTitle = navTitle.toLowerCase().trim();
-                          matchedMarker = markers.find(marker => {
-                            const markerTitle = marker.title.toLowerCase().trim();
-                            return markerTitle === searchTitle || 
-                                  markerTitle.includes(searchTitle) || 
-                                  searchTitle.includes(markerTitle);
-                          });
-                        }
-                        if (!matchedMarker) {
-                          alert(`Destinasi "${navTitle}" tidak ditemukan di database peta.`);
-                          return;
-                        }
-                        const lat = typeof matchedMarker.lat === 'string' ? parseFloat(matchedMarker.lat) : matchedMarker.lat;
-                        const lng = typeof matchedMarker.lng === 'string' ? parseFloat(matchedMarker.lng) : matchedMarker.lng;
-                        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                          const destination = {
-                            lat: lat,
-                            lng: lng,
-                            title: matchedMarker.title || navTitle,
-                            content_id: matchedMarker.id,
-                          };
-                          const routeParam = encodeURIComponent(JSON.stringify([destination]));
-                          window.location.href = `/dashboard/peta?route=${routeParam}`;
-                        } else {
-                          alert(`Koordinat "${navTitle}" belum tersedia di database.`);
-                        }
-                      } catch (err: any) {
-                        console.error("Navigation error:", err);
-                        alert(`Gagal membuka peta: ${err.message || 'Unknown error'}`);
-                      }
-                    }}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
-                    title="Lihat di Peta"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Peta
-                  </button>
+
                   
                   {/* TOMBOL DINAMIS: Tambah atau Ganti */}
                   <button 
