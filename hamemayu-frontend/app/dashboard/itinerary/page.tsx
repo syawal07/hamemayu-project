@@ -1076,13 +1076,13 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
           const status = getItineraryStatus(item.start_date, item.end_date);
           
           return (
-            <div key={item.id} className={`bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group ${status.status === 'completed' ? 'opacity-75' : ''}`}>
-              
+              <div key={item.id} className={`bg-white/60 dark:bg-brutal-dark/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 relative group flex flex-col h-full ${status.status === 'completed' ? 'opacity-75' : ''}`}> 
               {/* Badge Status */}
               <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase tracking-widest ${status.bgColor} ${status.textColor}`}>
                 {status.label}
               </div>
 
+              <div className="flex-1">
               <h3 className="font-serif text-xl font-bold mb-3 pr-32">{item.title}</h3>
               
               {/* Info */}
@@ -1111,10 +1111,11 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
                   {new Date(item.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </div>
               ) : null}
+              </div> 
               
               <button 
                 onClick={() => handleViewDetail(item.id)} 
-                className={`w-full py-3 rounded-xl font-mono text-xs font-bold uppercase mt-2 transition-opacity ${
+                  className={`w-full py-3 rounded-xl font-mono text-xs font-bold uppercase mt-auto transition-opacity ${
                   status.status === 'completed' 
                     ? 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed' 
                     : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90'
