@@ -382,11 +382,11 @@ export default function ItineraryPage() {
             estimated_total_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
             highlights: generatedResult.summary.highlights || [],
           },
-          // ✅ PASTIKAN days ada & setiap day punya slots
+          //  PASTIKAN days ada & setiap day punya slots
           days: daysArray.map(day => ({
             day: day.day,
             theme: day.theme || `Hari ${day.day}`,
-            slots: day.slots || [], // ✅ Pastikan slots ada
+            slots: day.slots || [], //  Pastikan slots ada
           }))
         }
       };
@@ -725,49 +725,57 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
   const getWeatherForDay = (dayIndex: number) => {
     return Array.isArray(weatherForecast) ? weatherForecast[dayIndex] || null : null;
   };
-
-  const openEditSlotModal = async (dayIndex: number, slotIndex: number) => {
-    setEditingSlot({ dayIndex, slotIndex });
-    try {
-      const res = await fetchAPI('/wishlist', { requireAuth: true });
-      if (res) {
-        setWishlistForEdit(res);
-        setShowEditSlotModal(true);
-      }
-    } catch (error) {
-      console.error("Failed to load wishlist:", error);
-      alert("Gagal memuat wishlist");
+// ini di edit gk muncul edit
+const openEditSlotModal = async (dayIndex: number, slotIndex: number) => {
+  setEditingSlot({ dayIndex, slotIndex });
+  try {
+    //  Fetch wishlist terbaru
+    const res = await fetchAPI('/wishlist', { requireAuth: true });
+    if (res && Array.isArray(res)) {
+      setWishlistForEdit(res);
+      setShowEditSlotModal(true);
+    } else {
+      alert("Wishlist kosong atau gagal dimuat!");
     }
-  };
+  } catch (error) {
+    console.error("Failed to load wishlist:", error);
+    alert("Gagal memuat wishlist. Silakan coba lagi.");
+  }
+};
 
-  const replaceSlotFromWishlist = async (wishlistItem: any) => {
-    if (!editingSlot || !editableDays) return;
-    
-    const newDays = [...editableDays];
-    const { dayIndex, slotIndex } = editingSlot;
-    
-    newDays[dayIndex].slots[slotIndex] = {
-      content_id: wishlistItem.content?.id || wishlistItem.id,
-      title: wishlistItem.content?.title || wishlistItem.title,
-      time_slot: newDays[dayIndex].slots[slotIndex].time_slot,
-      notes: wishlistItem.notes || '',
-    };
-    
-    setEditableDays(newDays);
-    setShowEditSlotModal(false);
-    setEditingSlot(null);
-    
-    await handleUpdateDetail({ 
-      itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } 
-    });
-    
-    alert("Destinasi berhasil diganti!");
+const replaceSlotFromWishlist = async (wishlistItem: any) => {
+  if (!editingSlot || !editableDays) return;
+  
+  const newDays = [...editableDays];
+  const { dayIndex, slotIndex } = editingSlot;
+  
+  //  LOGIC BARU: Cari data asli (bisa di dalam 'content' atau 'plannable')
+  const actualData = wishlistItem.content || wishlistItem.plannable || wishlistItem;
+  
+  // Update slot dengan data yang bener
+  newDays[dayIndex].slots[slotIndex] = {
+    content_id: actualData.id, //  ID Destinasi/Event yang asli
+    title: actualData.title || wishlistItem.title || 'Destinasi', //  Judul yang asli
+    time_slot: newDays[dayIndex].slots[slotIndex].time_slot, // Pertahankan jam
+    notes: wishlistItem.notes || '',
   };
+  
+  setEditableDays(newDays);
+  setShowEditSlotModal(false);
+  setEditingSlot(null);
+  
+  // Auto-save
+  await handleUpdateDetail({ 
+    itinerary_data: { ...selectedDetail!.itinerary_data, days: newDays } 
+  });
+  
+  alert("Destinasi berhasil diganti!");
+};
 
-// ✅ State untuk multi-select sementara di modal
+//  State untuk multi-select sementara di modal
 const [tempSelectedIds, setTempSelectedIds] = useState<Set<number>>(new Set());
 
-// ✅ Toggle centang destinasi
+//  Toggle centang destinasi
 const toggleTempSelect = (index: number) => {
   setTempSelectedIds(prev => {
     const next = new Set(prev);
@@ -1710,115 +1718,109 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
 
       {/* Modal Edit Slot dari Wishlist - DENGAN TOMBOL NAVIGASI */}
       {showEditSlotModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowEditSlotModal(false)}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Pilih Destinasi dari Wishlist</h3>
-              <button onClick={() => setShowEditSlotModal(false)} className="text-slate-500 hover:text-slate-700">✕</button>
-            </div>
+  <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowEditSlotModal(false)}>
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">Pilih Destinasi dari Wishlist</h3>
+        <button onClick={() => setShowEditSlotModal(false)} className="text-slate-500 hover:text-slate-700">✕</button>
+      </div>
+      
+      <div className="space-y-2 max-h-96 overflow-y-auto">
+        {wishlistForEdit && wishlistForEdit.length > 0 ? (
+          wishlistForEdit.map((item: any, index: number) => {
+            const title = item.content?.title || item.plannable?.title || item.title || 'Destinasi';
+            const category = item.content?.category?.name || item.plannable?.category || item.category || 'Umum';
             
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {wishlistForEdit.map((item: any) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                  {/* Area kiri untuk klik ganti slot */}
-                  <div className="flex-1 cursor-pointer" onClick={() => replaceSlotFromWishlist(item)}>
-                    <p className="font-bold text-sm">{item.content?.title || item.title}</p>
-                    <p className="text-xs text-slate-500">{item.content?.category?.name || item.category}</p>
-                  </div>
-                  
-                  {/* Tombol-tombol di kanan */}
-                  <div className="flex gap-2">
-                    {/* ✅ TOMBOL NAVIGASI - DENGAN LOGIC MATCHING YANG DIPERBAIKI */}
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation(); // Jangan trigger replaceSlotFromWishlist
-                        
-                        // Navigasi ke destinasi ini
-                        const title = item.content?.title || item.title;
-                        
-                        try {
-                          // Fetch markers
-                          const markers: any[] = await fetchAPI('/map-markers');
-                          
-                          if (!Array.isArray(markers)) {
-                            alert("Gagal memuat data peta.");
-                            return;
-                          }
-
-                          let matchedMarker = null;
-
-                          // PRIORITAS 1: Match by content.id
-                          if (item.content?.id) {
-                            matchedMarker = markers.find(m => m.id === item.content.id);
-                          }
-
-                          // PRIORITAS 2: Fallback - Match by title
-                          if (!matchedMarker && title) {
-                            const searchTitle = title.toLowerCase().trim();
-                            matchedMarker = markers.find(marker => {
-                              const markerTitle = marker.title.toLowerCase().trim();
-                              return markerTitle === searchTitle || 
-                                    markerTitle.includes(searchTitle) || 
-                                    searchTitle.includes(markerTitle);
-                            });
-                          }
-
-                          if (!matchedMarker) {
-                            alert(`Destinasi "${title}" tidak ditemukan di database peta.`);
-                            return;
-                          }
-
-                          // Parse koordinat
-                          const lat = typeof matchedMarker.lat === 'string' ? parseFloat(matchedMarker.lat) : matchedMarker.lat;
-                          const lng = typeof matchedMarker.lng === 'string' ? parseFloat(matchedMarker.lng) : matchedMarker.lng;
-
-                          if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                            const destination = {
-                              lat: lat,
-                              lng: lng,
-                              title: matchedMarker.title || title,
-                              content_id: matchedMarker.id,
-                            };
-                            
-                            const routeParam = encodeURIComponent(JSON.stringify([destination]));
-                            window.location.href = `/dashboard/peta?route=${routeParam}`;
-                          } else {
-                            alert(`Koordinat "${title}" belum tersedia di database.`);
-                          }
-                        } catch (err: any) {
-                          console.error("Navigation error:", err);
-                          alert(`Gagal membuka peta: ${err.message || 'Unknown error'}`);
-                        }
-                      }}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
-                      title="Lihat di Peta"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      Peta
-                    </button>
-                    
-                    {/* Tombol Ganti */}
-                    <button 
-                      onClick={() => replaceSlotFromWishlist(item)}
-                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg"
-                    >
-                      Ganti
-                    </button>
-                  </div>
+            return (
+              <div key={item.id || index} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                {/* Area kiri untuk klik ganti slot */}
+                <div className="flex-1 cursor-pointer" onClick={() => replaceSlotFromWishlist(item)}>
+                  <p className="font-bold text-sm text-slate-900 dark:text-white">{title}</p>
+                  <p className="text-xs text-slate-500">{category}</p>
                 </div>
-              ))}
-              {wishlistForEdit.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-8">
-                  Wishlist kosong. Tambahkan destinasi ke wishlist dulu!
-                </p>
-              )}
-            </div>
+                
+                {/* Tombol-tombol di kanan */}
+                <div className="flex gap-2">
+                  {/* Tombol Peta */}
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const navTitle = item.content?.title || item.title;
+                      try {
+                        const markers: any[] = await fetchAPI('/map-markers');
+                        if (!Array.isArray(markers)) {
+                          alert("Gagal memuat data peta.");
+                          return;
+                        }
+                        let matchedMarker = null;
+                        if (item.content?.id) {
+                          matchedMarker = markers.find(m => m.id === item.content.id);
+                        }
+                        if (!matchedMarker && navTitle) {
+                          const searchTitle = navTitle.toLowerCase().trim();
+                          matchedMarker = markers.find(marker => {
+                            const markerTitle = marker.title.toLowerCase().trim();
+                            return markerTitle === searchTitle || 
+                                  markerTitle.includes(searchTitle) || 
+                                  searchTitle.includes(markerTitle);
+                          });
+                        }
+                        if (!matchedMarker) {
+                          alert(`Destinasi "${navTitle}" tidak ditemukan di database peta.`);
+                          return;
+                        }
+                        const lat = typeof matchedMarker.lat === 'string' ? parseFloat(matchedMarker.lat) : matchedMarker.lat;
+                        const lng = typeof matchedMarker.lng === 'string' ? parseFloat(matchedMarker.lng) : matchedMarker.lng;
+                        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                          const destination = {
+                            lat: lat,
+                            lng: lng,
+                            title: matchedMarker.title || navTitle,
+                            content_id: matchedMarker.id,
+                          };
+                          const routeParam = encodeURIComponent(JSON.stringify([destination]));
+                          window.location.href = `/dashboard/peta?route=${routeParam}`;
+                        } else {
+                          alert(`Koordinat "${navTitle}" belum tersedia di database.`);
+                        }
+                      } catch (err: any) {
+                        console.error("Navigation error:", err);
+                        alert(`Gagal membuka peta: ${err.message || 'Unknown error'}`);
+                      }
+                    }}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                    title="Lihat di Peta"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Peta
+                  </button>
+                  
+                  {/* Tombol Ganti */}
+                  <button 
+                    onClick={() => replaceSlotFromWishlist(item)}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg"
+                  >
+                    Ganti
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-slate-500 dark:text-slate-400 mb-4">Wishlist kosong.</p>
+            <Link href="/dashboard/wishlist" className="text-blue-600 hover:text-blue-700 font-bold text-sm">
+              Tambahkan destinasi ke wishlist →
+            </Link>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
