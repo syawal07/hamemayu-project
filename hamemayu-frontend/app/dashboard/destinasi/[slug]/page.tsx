@@ -18,6 +18,20 @@ interface ContentDetail {
   lng: number | null;
 }
 
+// ✅ HELPER: Fix URL gambar pakai env variable (NGGAK HARDCODE)
+const fixImageUrl = (url: string | null): string | null => {
+  if (!url) return null;
+  
+  // Kalau udah full URL dari backend, return apa adanya
+  if (url.startsWith('http')) {
+    return url;
+  }
+  
+  // Kalau relative path, prepend storage URL dari env
+  const storageUrl = process.env.NEXT_PUBLIC_STORAGE_URL || 'http://localhost/storage';
+  return `${storageUrl}/${url}`;
+};
+
 export default function DetailDestinasiPage() {
   const params = useParams();
   const router = useRouter();
@@ -108,12 +122,22 @@ export default function DetailDestinasiPage() {
           {data.cover_image ? (
             <>
               <Image 
-                src={data.cover_image.startsWith('http') ? data.cover_image : `http://127.0.0.1:8000/storage/${data.cover_image}`} 
+                src={fixImageUrl(data.cover_image) || ''} 
                 alt={data.title} 
                 fill 
                 className="object-cover" 
                 priority
                 unoptimized
+                onError={(e) => {
+                  // Fallback kalau gambar error
+                  const target = e.target as HTMLImageElement;
+                  if (!target.dataset.fallback) {
+                    target.dataset.fallback = 'true';
+                    // Coba fallback ke URL sederhana
+                    const fileName = data.cover_image?.replace(/^.*\/(contents|events)\//, '');
+                    target.src = `http://localhost/storage/contents/${fileName}`;
+                  }
+                }}
               />
               <div className="absolute inset-0 bg-linear-to-t from-slate-900/90 via-slate-900/30 to-transparent" />
             </>
