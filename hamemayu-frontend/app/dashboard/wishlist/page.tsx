@@ -5,18 +5,27 @@ import { fetchAPI } from '../../lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
 
+// ✅ UPDATE INTERFACE: Handle plannable OR content
 interface WishlistItem {
   id: number;
   notes: string | null;
   visited: boolean;
   priority: number;
-  content: {
+  plannable?: {
+    id: number;
+    slug: string;
+    title: string;
+    category: string | { name: string };
+    image: string | null;
+    cover_image?: string | null;
+    type: string;
+  };
+  content?: {
     id: number;
     slug: string;
     title: string;
     category: { name: string };
     cover_image: string | null;
-    location?: { lat: number; lng: number };
   };
 }
 
@@ -29,8 +38,10 @@ export default function WishlistPage() {
     const loadWishlists = async () => {
       if (isMounted) setLoading(true);
       try {
-        const res = await fetchAPI<WishlistItem[]>('/wishlist', { requireAuth: true });
-        if (res && Array.isArray(res) && isMounted) setWishlists(res);
+        const res = await fetchAPI<any>('/wishlist', { requireAuth: true });
+        // ✅ Handle response format baru: { success: true, data: [...] }
+        const data = res?.data || res || [];
+        if (Array.isArray(data) && isMounted) setWishlists(data);
       } catch (error) { console.error(error); }
       finally { if (isMounted) setLoading(false); }
     };
@@ -56,14 +67,30 @@ export default function WishlistPage() {
     } catch (error) { console.error(error); }
   };
 
-  // Helper: Navigasi Single Item
+  // ✅ HELPER: Ambil data item (prioritaskan plannable)
+  const getItemData = (item: WishlistItem) => {
+    const data = item.plannable || item.content;
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      slug: data.slug,
+      title: data.title,
+      category: typeof data.category === 'string' ? data.category : data.category?.name,
+      image: data.image || data.cover_image,
+      type: (data as any).type || 'App\Models\Content'
+    };
+  };
+
   const navigateToItem = async (item: WishlistItem) => {
+    const itemData = getItemData(item);
+    if (!itemData) return;
+    
     try {
       const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
-      // Pass array with single item
-      const destinations = await extractWishlistCoords([item]);
+      const destinations = await extractWishlistCoords([{ ...item, content: { ...item.content, title: itemData.title } }]);
       if (destinations.length === 0) {
-        alert(`Koordinat untuk "${item.content?.title}" belum tersedia.`);
+        alert(`Koordinat untuk "${itemData.title}" belum tersedia.`);
         return;
       }
       window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
@@ -73,7 +100,6 @@ export default function WishlistPage() {
     }
   };
 
-  // Helper: Navigasi All Wishlist
   const navigateAll = async () => {
     try {
       const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
@@ -107,7 +133,6 @@ export default function WishlistPage() {
         </Link>
       </div>
 
-      {/* TOMBOL NAVIGASI SEMUA */}
       {wishlists.length > 0 && (
         <div className="mb-6 flex justify-end">
           <button
@@ -126,66 +151,70 @@ export default function WishlistPage() {
         <div className="flex flex-col gap-5">{[1, 2, 3].map(i => <div key={i} className="h-32 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md rounded-3xl animate-pulse border border-white/50 dark:border-slate-700/50 shadow-sm"></div>)}</div>
       ) : wishlists.length > 0 ? (
         <div className="flex flex-col gap-6">
-          {wishlists.map(item => (
-            <div key={item.id} className={`flex flex-col sm:flex-row bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-xl border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.04)] rounded-3xl p-2.5 transition-all duration-500 group ${item.visited ? 'opacity-80' : 'hover:shadow-[0_12px_40px_rgba(15,28,53,0.08)] hover:-translate-y-1'}`}>
-              
-              <div className="relative w-full sm:w-56 h-48 sm:h-auto rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 shrink-0">
-                {item.content?.cover_image ? (
-                  <div className={`absolute inset-0 w-full h-full transition-transform duration-700 ease-out group-hover:scale-105 ${item.visited ? 'grayscale opacity-80' : ''}`}>
-                    <Image src={item.content.cover_image.startsWith('http') ? item.content.cover_image : `http://127.0.0.1:8000/storage/${item.content.cover_image}`} alt={item.content.title} fill className="object-cover" unoptimized />
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center font-mono text-[10px] text-slate-400 uppercase tracking-widest">
-                    <svg className="w-8 h-8 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                    [ NO_IMAGE ]
-                  </div>
-                )}
-                {item.visited && (
-                  <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full font-mono text-[9px] font-bold tracking-widest flex items-center gap-1.5">
-                    <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                    TERKUNJUNGI
-                  </div>
-                )}
-              </div>
-
-              <div className="p-5 flex-1 flex flex-col justify-between">
-                <div>
-                  <div className="flex flex-col-reverse sm:flex-row sm:items-start justify-between gap-3 mb-2">
-                    <h3 className="font-serif text-2xl font-bold text-slate-900 dark:text-white leading-tight tracking-tight line-clamp-2">
-                      {item.content?.title}
-                    </h3>
-                    <span className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full font-mono text-[9px] font-bold uppercase tracking-widest whitespace-nowrap shadow-sm w-fit">
-                      {item.content?.category?.name || 'UMUM'}
-                    </span>
-                  </div>
-                  <div className="bg-slate-50/50 dark:bg-slate-800/30 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50 mb-6">
-                    <p className="font-mono text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                      <span className="font-bold text-slate-800 dark:text-slate-200">Catatan:</span> {item.notes || 'Tidak ada catatan tambahan untuk destinasi ini.'}
-                    </p>
-                  </div>
+          {wishlists.map(item => {
+            const itemData = getItemData(item);
+            if (!itemData) return null;
+            
+            return (
+              <div key={item.id} className={`flex flex-col sm:flex-row bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-xl border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.04)] rounded-3xl p-2.5 transition-all duration-500 group ${item.visited ? 'opacity-80' : 'hover:shadow-[0_12px_40px_rgba(15,28,53,0.08)] hover:-translate-y-1'}`}>
+                
+                <div className="relative w-full sm:w-56 h-48 sm:h-auto rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 shrink-0">
+                  {itemData.image ? (
+                    <div className={`absolute inset-0 w-full h-full transition-transform duration-700 ease-out group-hover:scale-105 ${item.visited ? 'grayscale opacity-80' : ''}`}>
+                      <Image src={itemData.image.startsWith('http') ? itemData.image : `http://127.0.0.1:8000/storage/${itemData.image}`} alt={itemData.title} fill className="object-cover" unoptimized />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center font-mono text-[10px] text-slate-400 uppercase tracking-widest">
+                      <svg className="w-8 h-8 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      [ NO_IMAGE ]
+                    </div>
+                  )}
+                  {item.visited && (
+                    <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full font-mono text-[9px] font-bold tracking-widest flex items-center gap-1.5">
+                      <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                      TERKUNJUNGI
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 mt-auto">
-                  {/* TOMBOL PER-ITEM NAVIGASI */}
-                  <button 
-                    onClick={() => navigateToItem(item)}
-                    className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    NAVIGASI
-                  </button>
-                  <button onClick={() => toggleVisited(item)} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm ${item.visited ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={item.visited ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"} /></svg>
-                    {item.visited ? 'TERKUNJUNGI' : 'TANDAI SELESAI'}
-                  </button>
-                  <button onClick={() => handleDelete(item.id)} className="px-5 py-2.5 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 font-mono text-xs font-bold border border-red-200 dark:border-red-900/50 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all uppercase flex items-center gap-2 shadow-sm">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    <span className="hidden sm:inline">HAPUS</span>
-                  </button>
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex flex-col-reverse sm:flex-row sm:items-start justify-between gap-3 mb-2">
+                      <h3 className="font-serif text-2xl font-bold text-slate-900 dark:text-white leading-tight tracking-tight line-clamp-2">
+                        {itemData.title}
+                      </h3>
+                      <span className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full font-mono text-[9px] font-bold uppercase tracking-widest whitespace-nowrap shadow-sm w-fit">
+                        {itemData.category || 'UMUM'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50/50 dark:bg-slate-800/30 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50 mb-6">
+                      <p className="font-mono text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                        <span className="font-bold text-slate-800 dark:text-slate-200">Catatan:</span> {item.notes || 'Tidak ada catatan tambahan untuk destinasi ini.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 mt-auto">
+                    <button 
+                      onClick={() => navigateToItem(item)}
+                      className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      NAVIGASI
+                    </button>
+                    <button onClick={() => toggleVisited(item)} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm ${item.visited ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={item.visited ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"} /></svg>
+                      {item.visited ? 'TERKUNJUNGI' : 'TANDAI SELESAI'}
+                    </button>
+                    <button onClick={() => handleDelete(item.id)} className="px-5 py-2.5 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 font-mono text-xs font-bold border border-red-200 dark:border-red-900/50 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all uppercase flex items-center gap-2 shadow-sm">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      <span className="hidden sm:inline">HAPUS</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white/40 dark:bg-brutal-dark/40 backdrop-blur-2xl border border-white/50 dark:border-slate-700/50 p-16 rounded-[2.5rem] text-center shadow-sm flex flex-col items-center justify-center mt-6">
