@@ -72,12 +72,20 @@ export default function WishlistPage() {
     const data = item.plannable || item.content;
     if (!data) return null;
     
+    // ✅ FIX: Handle image URL untuk event vs content
+    let imageUrl = data.image || data.cover_image;
+    
+    // Kalau image relatif path (nggak mulai dengan http), tambahkan storage URL
+    if (imageUrl && !imageUrl.startsWith('http')) {
+      imageUrl = `http://localhost/storage/${imageUrl}`;
+    }
+    
     return {
       id: data.id,
       slug: data.slug,
       title: data.title,
       category: typeof data.category === 'string' ? data.category : data.category?.name,
-      image: data.image || data.cover_image,
+      image: imageUrl,
       type: (data as any).type || 'App\Models\Content'
     };
   };
@@ -159,11 +167,21 @@ export default function WishlistPage() {
               <div key={item.id} className={`flex flex-col sm:flex-row bg-white/60 dark:bg-brutal-dark/60 backdrop-blur-xl border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.04)] rounded-3xl p-2.5 transition-all duration-500 group ${item.visited ? 'opacity-80' : 'hover:shadow-[0_12px_40px_rgba(15,28,53,0.08)] hover:-translate-y-1'}`}>
                 
                 <div className="relative w-full sm:w-56 h-48 sm:h-auto rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 shrink-0">
-                  {itemData.image ? (
-                    <div className={`absolute inset-0 w-full h-full transition-transform duration-700 ease-out group-hover:scale-105 ${item.visited ? 'grayscale opacity-80' : ''}`}>
-                      <Image src={itemData.image.startsWith('http') ? itemData.image : `http://127.0.0.1:8000/storage/${itemData.image}`} alt={itemData.title} fill className="object-cover" unoptimized />
-                    </div>
-                  ) : (
+                {itemData.image ? (
+                  <div className={`absolute inset-0 w-full h-full transition-transform duration-700 ease-out group-hover:scale-105 ${item.visited ? 'grayscale opacity-80' : ''}`}>
+                    <Image 
+                      src={itemData.image} 
+                      alt={itemData.title} 
+                      fill 
+                      className="object-cover" 
+                      unoptimized 
+                      onError={(e) => {
+                        // Fallback kalau gambar error
+                        (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                  </div>
+                ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center font-mono text-[10px] text-slate-400 uppercase tracking-widest">
                       <svg className="w-8 h-8 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                       [ NO_IMAGE ]
