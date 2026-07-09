@@ -207,7 +207,7 @@ export default function ItineraryPage() {
   const handleManualGenerate = async () => {
     if (manualDestinations.length === 0) { alert('PILIH MINIMAL 1 DESTINASI DULU!'); return; }
     if (!startDate || !endDate) { alert('PILIH TANGGAL MULAI DAN SELESAI!'); return; }
-
+  
     setIsGenerating(true);
     try {
       const days = calculateDays();
@@ -218,11 +218,13 @@ export default function ItineraryPage() {
         daysArray.push({
           day: dayNum,
           theme: `Hari ${dayNum}`,
-          slots: dayDestinations.map((dest, idx) => ({
+          // PASTIKAN slots ADA (array, bukan undefined)
+          slots: dayDestinations.length > 0 ? dayDestinations.map((dest, idx) => ({
             content_id: dest.content_id,
             title: dest.title,
-            time_slot: dest.assigned_time || ['pagi', 'siang', 'sore'][idx % 3],
-          })),
+            time_slot: dest.assigned_time || '08:00',
+            notes: '',
+          })) : [], // Fallback: array kosong kalau nggak ada destinasi
         });
       }
       
@@ -315,24 +317,29 @@ export default function ItineraryPage() {
       ? Math.floor(parseInt(String(generatedResult.summary.total_destinations))) 
       : daysArray.reduce((acc: number, day: any) => acc + day.slots.length, 0);
 
-    const payload = {
-      title: formTitle || 'Rencana Eksplorasi Baru',
-      start_date: startDateTime,
-      end_date: endDateTime,
-      days: calculateDays(),
-      budget_type: formBudget,
-      total_destinations: totalDestinations,
-      estimated_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
-      itinerary_data: {
-        summary: {
-          total_days: calculateDays(),
-          total_destinations: totalDestinations,
-          estimated_total_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
-          highlights: generatedResult.summary.highlights || [],
-        },
-        days: daysArray
-      }
-    };
+      const payload = {
+        title: formTitle || 'Rencana Eksplorasi Baru',
+        start_date: startDateTime,
+        end_date: endDateTime,
+        days: calculateDays(),
+        budget_type: formBudget,
+        total_destinations: totalDestinations,
+        estimated_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
+        itinerary_data: {
+          summary: {
+            total_days: calculateDays(),
+            total_destinations: totalDestinations,
+            estimated_total_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
+            highlights: generatedResult.summary.highlights || [],
+          },
+          // ✅ PASTIKAN days ada & setiap day punya slots
+          days: daysArray.map(day => ({
+            day: day.day,
+            theme: day.theme || `Hari ${day.day}`,
+            slots: day.slots || [], // ✅ Pastikan slots ada
+          }))
+        }
+      };
 
     console.log("SENDING PAYLOAD:", payload);
 
@@ -693,41 +700,56 @@ const navigateSingleToMap = async (slot: ItinerarySlot) => {
 const [tempSelectedIds, setTempSelectedIds] = useState<Set<number>>(new Set());
 
 // ✅ Toggle centang destinasi
-const toggleTempSelect = (id: number) => {
+const toggleTempSelect = (index: number) => {
   setTempSelectedIds(prev => {
     const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
+    if (next.has(index)) {
+      next.delete(index);
+    } else {
+      next.add(index);
+    }
     return next;
   });
 };
 
-// ✅ Tambahkan semua yang dicentang sekaligus
+// Tambahkan semua yang dicentang sekaligus (PAKAI INDEX)
 const addSelectedDestinations = () => {
-  const allItems = [...wishlistItems, ...searchResults];
-  const itemsToAdd = allItems
-    .filter(item => {
-      const contentId = item.content?.id || item.id;
-      return tempSelectedIds.has(contentId);
-    })
-    .map(item => {
-      const content = item.content || item;
+  // Dari wishlist (pakai index)
+  const fromWishlist = wishlistItems
+    .filter((item, index) => tempSelectedIds.has(index))
+    .map((item) => {
+      const content = item.content || item.plannable || item;
       return {
-        id: content.id,
-        title: content.title,
-        content_id: content.id,
-        category: content.category?.name || 'Umum',
+        id: content.id || item.id,
+        title: content.title || item.title,
+        content_id: content.id || item.id,
+        category: content.category?.name || content.category || item.category || 'Umum',
         assigned_day: undefined,
         assigned_time: undefined,
       };
     });
 
+  // Dari search results (pakai ID dengan prefix)
+  const fromSearch = searchResults
+    .filter(dest => tempSelectedIds.has(`search-${dest.id}`))
+    .map(dest => ({
+      id: dest.id,
+      title: dest.title,
+      content_id: dest.id,
+      category: dest.category?.name || 'Umum',
+      assigned_day: undefined,
+      assigned_time: undefined,
+    }));
+
+  const itemsToAdd = [...fromWishlist, ...fromSearch];
+
   // Filter duplikat
-  const existingIds = new Set(manualDestinations.map(d => d.id));
-  const uniqueNew = itemsToAdd.filter(d => !existingIds.has(d.id));
+  const existingIds = new Set(manualDestinations.map(d => d.content_id));
+  const uniqueNew = itemsToAdd.filter(d => !existingIds.has(d.content_id));
 
   setManualDestinations(prev => [...prev, ...uniqueNew]);
-  setTempSelectedIds(new Set()); // Reset centang
-  setShowDestinationPicker(false); // Tutup modal
+  setTempSelectedIds(new Set());
+  setShowDestinationPicker(false);
 };
 
 
@@ -813,7 +835,7 @@ const addSelectedDestinations = () => {
                     ) : (
                       <ul className="space-y-2 max-h-48 overflow-y-auto">
                         {manualDestinations.map((dest, idx) => (
-                          <li key={dest.id} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-lg text-xs">
+                          <li key={`${dest.id}-${idx}`} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded-lg text-xs">
                             <div className="flex items-center gap-2 flex-1">
                               <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold">{idx + 1}</span>
                               <div className="flex-1 min-w-0">
@@ -1174,7 +1196,7 @@ const addSelectedDestinations = () => {
 )}
 
       {/* Destination Picker Modal */}
-{/* ✅ Destination Picker Modal - MULTI SELECT */}
+{/* Destination Picker Modal */}
 {showDestinationPicker && (
   <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowDestinationPicker(false)}>
     <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-2xl w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -1188,15 +1210,25 @@ const addSelectedDestinations = () => {
         <div>
           <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">❤️ Wishlist Saya</h4>
           <div className="space-y-2">
-            {wishlistItems.map((item: any) => {
-              const id = item.content?.id;
-              const isSelected = tempSelectedIds.has(id);
+            {wishlistItems.map((item: any, index: number) => {
+              const isSelected = tempSelectedIds.has(index);
+              const title = item.content?.title || item.plannable?.title || item.title || 'Destinasi';
+              const category = item.content?.category?.name || item.plannable?.category || item.category || 'Umum';
+              
               return (
-                <div key={id} onClick={() => toggleTempSelect(id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+                <div 
+                  key={`${item.id || index}-${index}`}
+                  onClick={() => toggleTempSelect(index)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    isSelected 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' 
+                      : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
+                  }`}
+                >
                   <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 accent-blue-600" />
                   <div className="flex-1">
-                    <p className="font-bold text-sm">{item.content?.title}</p>
-                    <p className="text-xs text-slate-500">Destinasi</p>
+                    <p className="font-bold text-sm">{title}</p>
+                    <p className="text-xs text-slate-500">{category}</p>
                   </div>
                 </div>
               );
@@ -1207,13 +1239,28 @@ const addSelectedDestinations = () => {
 
         {/* Search Section */}
         <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-          <h4 className="font-bold text-sm mb-3">🔍 Cari dari Database</h4>
-          <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); searchDestinations(e.target.value); }} placeholder="Cari destinasi..." className="w-full p-3 border rounded-xl mb-3 bg-white dark:bg-slate-800" />
+          <h4 className="font-bold text-sm mb-3">Cari dari Database</h4>
+          <input 
+            type="text" 
+            value={searchQuery} 
+            onChange={(e) => { setSearchQuery(e.target.value); searchDestinations(e.target.value); }} 
+            placeholder="Cari destinasi..." 
+            className="w-full p-3 border rounded-xl mb-3 bg-white dark:bg-slate-800" 
+          />
           <div className="space-y-2">
             {searchResults.map((dest: any) => {
-              const isSelected = tempSelectedIds.has(dest.id);
+              const isSelected = tempSelectedIds.has(`search-${dest.id}`);
+              
               return (
-                <div key={dest.id} onClick={() => toggleTempSelect(dest.id)} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+                <div 
+                  key={`search-${dest.id}`} 
+                  onClick={() => toggleTempSelect(`search-${dest.id}`)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    isSelected 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' 
+                      : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
+                  }`}
+                >
                   <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 accent-blue-600" />
                   <div className="flex-1">
                     <p className="font-bold text-sm">{dest.title}</p>
@@ -1229,7 +1276,7 @@ const addSelectedDestinations = () => {
       {/* Footer Action */}
       <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
         <p className="text-sm text-slate-500">
-          {tempSelectedIds.size > 0 ? `✅ ${tempSelectedIds.size} destinasi dipilih` : 'Centang destinasi untuk menambahkan'}
+          {tempSelectedIds.size > 0 ? `${tempSelectedIds.size} destinasi dipilih` : 'Centang destinasi untuk menambahkan'}
         </p>
         <button 
           onClick={addSelectedDestinations} 
@@ -1243,9 +1290,8 @@ const addSelectedDestinations = () => {
   </div>
 )}
 
-      {/* MANUAL SCHEDULER MODAL */}
-      {showScheduler && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowScheduler(false)}>
+{showScheduler && (
+  <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowScheduler(false)}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <div>
@@ -1260,7 +1306,7 @@ const addSelectedDestinations = () => {
                 <h4 className="font-bold text-sm mb-3 text-blue-600 dark:text-blue-400">📋 Destinasi Tersedia</h4>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {manualDestinations.map((dest, idx) => (
-                    <div key={dest.id} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div key={`${dest.id}-${idx}`} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                       <div className="flex items-start gap-2 mb-2">
                         <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 flex items-center justify-center text-xs font-bold flex-shrink-0">{idx + 1}</span>
                         <div className="flex-1">
@@ -1318,8 +1364,8 @@ const addSelectedDestinations = () => {
                           <p className="text-xs text-green-600 dark:text-green-400 italic">Belum ada destinasi</p>
                         ) : (
                           <ul className="space-y-1">
-                            {dayDestinations.map((dest) => (
-                              <li key={dest.id} className="text-xs flex items-center gap-2">
+                            {dayDestinations.map((dest, idx) => (
+                              <li key={`${dest.id}-${idx}`} className="text-xs flex items-center gap-2">
                                 <span className="text-green-600 dark:text-green-400 font-bold font-mono">{dest.assigned_time}:</span>
                                 <span className="text-slate-700 dark:text-slate-300">{dest.title}</span>
                               </li>
