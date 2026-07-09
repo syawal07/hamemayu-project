@@ -1836,12 +1836,17 @@ const getItineraryStatus = (startDate: string | undefined, endDate: string | und
                     Peta
                   </button>
                   
-                  {/* Tombol Ganti */}
+                  {/* TOMBOL DINAMIS: Tambah atau Ganti */}
                   <button 
                     onClick={() => replaceSlotFromWishlist(item)}
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg"
+                    className={`px-3 py-1 text-white text-xs font-bold rounded-lg ${
+                      // Cek apakah ini mode 'Tambah' (slotIndex === -1)
+                      editingSlot?.slotIndex === -1 
+                        ? 'bg-green-600 hover:bg-green-700' // Warna hijau untuk Tambah
+                        : 'bg-blue-600 hover:bg-blue-700'   // Warna biru untuk Ganti
+                    }`}
                   >
-                    Ganti
+                    {editingSlot?.slotIndex === -1 ? 'Tambah' : 'Ganti'}
                   </button>
                 </div>
               </div>
