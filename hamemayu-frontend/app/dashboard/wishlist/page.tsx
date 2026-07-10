@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { fetchAPI } from '../../lib/api';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 interface WishlistItem {
   id: number;
@@ -24,7 +23,6 @@ interface WishlistItem {
 export default function WishlistPage() {
   const [wishlists, setWishlists] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     let isMounted = true;
@@ -58,21 +56,24 @@ export default function WishlistPage() {
     } catch (error) { console.error(error); }
   };
 
+  // Helper: Navigasi Single Item
   const navigateToItem = async (item: WishlistItem) => {
     try {
       const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
+      // Pass array with single item
       const destinations = await extractWishlistCoords([item]);
       if (destinations.length === 0) {
         alert(`Koordinat untuk "${item.content?.title}" belum tersedia.`);
         return;
       }
-      router.push(`/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`);
+      window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
     } catch (err) {
       console.error("Nav item failed:", err);
       alert("Gagal membuka peta.");
     }
   };
 
+  // Helper: Navigasi All Wishlist
   const navigateAll = async () => {
     try {
       const { extractWishlistCoords } = await import('../../lib/itinerary-utils');
@@ -81,7 +82,7 @@ export default function WishlistPage() {
         alert("Tidak ada destinasi dengan koordinat valid di wishlist.");
         return;
       }
-      router.push(`/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`);
+      window.location.href = `/dashboard/peta?route=${encodeURIComponent(JSON.stringify(destinations))}`;
     } catch (err) {
       console.error("Nav all failed:", err);
       alert("Gagal memuat data peta.");
@@ -106,6 +107,7 @@ export default function WishlistPage() {
         </Link>
       </div>
 
+      {/* TOMBOL NAVIGASI SEMUA */}
       {wishlists.length > 0 && (
         <div className="mb-6 flex justify-end">
           <button
@@ -164,6 +166,7 @@ export default function WishlistPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 mt-auto">
+                  {/* TOMBOL PER-ITEM NAVIGASI */}
                   <button 
                     onClick={() => navigateToItem(item)}
                     className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-mono text-xs font-bold transition-all uppercase flex items-center justify-center gap-2 border shadow-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40"

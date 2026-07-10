@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\V1\ChatController;
 use App\Models\SiteSetting;
 use App\Models\Feature;
 use App\Models\Faq;
+use App\Http\Controllers\Api\V1\CCTVController;
+use App\Http\Controllers\Api\V1\EventController;
 
 Route::prefix('v1')->group(function () {
 
@@ -66,9 +68,28 @@ Route::prefix('v1')->group(function () {
         Route::get('/itinerary/history/{id}', [ItineraryController::class, 'show']);
         Route::put('/itinerary/history/{id}', [ItineraryController::class, 'update']);
         Route::delete('/wishlist/bulk', [WishlistController::class, 'destroyBulk']);
+        Route::delete('/itinerary/history/{id}', [ItineraryController::class, 'destroy']);
+        Route::get('/itinerary/weather', [ItineraryController::class, 'getWeatherForecast']);
+
+        Route::prefix('events')->group(function () {
+            Route::get('/', [EventController::class, 'index']);           // List + Filter
+            Route::get('/calendar', [EventController::class, 'calendar']); // Data Kalender
+            Route::get('/{slug}', [EventController::class, 'show']);      // Detail
+            Route::get('/{id}/check-conflict', [EventController::class, 'checkConflict']); // Cek Bentrok
+        });
 
         Route::post('/chat', [ChatController::class, 'chat']);
 
     });
+
+    // CCTV Routes
+    Route::prefix('cctv')->group(function () {
+        Route::get('/cameras', [CCTVController::class, 'getCameras']);
+        Route::post('/refresh', [CCTVController::class, 'refresh']);
+        Route::get('/proxy/{cameraId}', [CCTVController::class, 'proxyStream']);
+    });
+
+    // Tambahkan route ini (PASTIKAN DI LUAR middleware auth jika ada)
+    Route::get('/cctv-proxy', [\App\Http\Controllers\Api\V1\CCTVProxyController::class, 'index']);
 
 });

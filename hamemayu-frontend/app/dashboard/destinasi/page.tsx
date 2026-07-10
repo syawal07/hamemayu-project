@@ -26,6 +26,14 @@ interface PaginatedResponse {
   last_page: number;
 }
 
+const fixImageUrl = (url: string | null): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  
+  const storageUrl = process.env.NEXT_PUBLIC_STORAGE_URL || 'http://localhost/storage';
+  return `${storageUrl}/${url}`;
+};
+
 export default function DestinasiPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
@@ -213,15 +221,15 @@ export default function DestinasiPage() {
                 
                 {/* Image Area */}
                 <div className="relative h-56 md:h-64 overflow-hidden bg-slate-100 dark:bg-slate-900 m-2 rounded-2xl">
-                  {item.cover_image ? (
-                    <Image 
-                      src={item.cover_image.startsWith('http') ? item.cover_image : `http://127.0.0.1:8000/storage/${item.cover_image}`} 
-                      alt={item.title} 
-                      fill 
-                      className="object-cover group-hover:scale-110 transition-transform duration-700 ease-out" 
-                      unoptimized
-                    />
-                  ) : (
+                {item.cover_image ? (
+                  <Image 
+                    src={fixImageUrl(item.cover_image) || ''} 
+                    alt={item.title} 
+                    fill 
+                    className="object-cover group-hover:scale-110 transition-transform duration-700 ease-out" 
+                    unoptimized
+                  />
+                ) : (
                     <div className="w-full h-full flex items-center justify-center font-mono text-[10px] tracking-widest text-slate-400 bg-slate-200/50 dark:bg-slate-800/50 uppercase backdrop-blur-sm">
                       [ VISUAL_DATA_MISSING ]
                     </div>

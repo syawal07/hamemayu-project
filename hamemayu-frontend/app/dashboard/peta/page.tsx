@@ -97,19 +97,17 @@ export default function PetaPage() {
   }, []);
 
   return (
-    <div className="animate-in fade-in duration-500 h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] flex flex-col max-w-7xl mx-auto w-full pb-6">
-      <div className="mb-6 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2 drop-shadow-sm">
-            Radar Interaktif
-          </h1>
-          <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
-            Navigasi & Pemantauan Titik Destinasi
-          </p>
-        </div>
+    <div className="h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] w-full">
+      <div className="px-6 mb-6">
+        <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2">
+          Radar Interaktif
+        </h1>
+        <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
+          Navigasi & Pemantauan Titik Destinasi
+        </p>
       </div>
-
-      <div className="flex-1 relative border border-white/60 dark:border-slate-700/50 shadow-[0_8px_32px_rgba(15,28,53,0.06)] overflow-hidden bg-slate-100 dark:bg-slate-900 rounded-4xl z-0">
+      
+      <div className="w-full h-full">
         {!loading && (
            <MapComponent 
              markers={markers} 
