@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { fetchAPI } from '../../lib/api';
-import { extractWishlistCoords } from '../../lib/itinerary-utils';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 
@@ -28,9 +27,9 @@ const MapComponent = dynamic(
   { 
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white/50 dark:bg-brutal-dark/50 backdrop-blur-xl animate-pulse">
-        <div className="w-12 h-12 border-4 border-green-700/30 dark:border-yellow-400/30 border-t-green-700 dark:border-t-yellow-400 rounded-full animate-spin mb-4"></div>
-        <p className="font-mono text-[10px] text-slate-500 font-bold uppercase tracking-widest">Mengaktifkan Radar Satelit...</p>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-white/40 dark:bg-black/20 backdrop-blur-xl animate-pulse rounded-[2.5rem]">
+        <div className="w-12 h-12 border-4 border-slate-900/30 dark:border-white/30 border-t-slate-900 dark:border-t-white rounded-full animate-spin mb-4" />
+        <p className="font-mono text-[10px] text-slate-500 font-bold uppercase tracking-widest">Menyiapkan Radar Peta...</p>
       </div>
     )
   }
@@ -44,7 +43,6 @@ export default function PetaPage() {
 
   const [markers, setMarkers] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [routeDestinations, setRouteDestinations] = useState<{lat: number, lng: number, title: string}[]>([]);
 
   const mapCenter: [number, number] = useMemo(() => {
     if (focusLat && focusLng) {
@@ -53,19 +51,19 @@ export default function PetaPage() {
     return DEFAULT_CENTER;
   }, [focusLat, focusLng]);
 
-  // ✅ Baca query param 'route' untuk navigasi itinerary/wishlist
-  useEffect(() => {
+  const routeDestinations = useMemo(() => {
     const routeParam = searchParams.get('route');
     if (routeParam) {
       try {
         const parsed = JSON.parse(decodeURIComponent(routeParam));
         if (Array.isArray(parsed)) {
-          setRouteDestinations(parsed);
+          return parsed;
         }
       } catch (err) {
-        console.error('Failed to parse route param:', err);
+        console.error('Gagal memproses parameter rute:', err);
       }
     }
+    return [];
   }, [searchParams]);
 
   useEffect(() => {
@@ -83,7 +81,7 @@ export default function PetaPage() {
           setMarkers(validMarkers);
         }
       } catch (error) {
-        console.error("Gagal memuat radar:", error);
+        console.error(error);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -97,25 +95,29 @@ export default function PetaPage() {
   }, []);
 
   return (
-    <div className="h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] w-full">
-      <div className="px-6 mb-6">
-        <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white uppercase tracking-tight mb-2">
-          Radar Interaktif
-        </h1>
-        <p className="font-mono text-slate-600 dark:text-slate-400 text-xs tracking-widest uppercase">
-          Navigasi & Pemantauan Titik Destinasi
-        </p>
+    <div className="animate-in fade-in duration-500 h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] flex flex-col max-w-7xl mx-auto w-full pb-6 px-4 md:px-8">
+      <div className="mb-6 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4 mt-8">
+        <div>
+          <h1 className="text-4xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white mb-2 drop-shadow-sm leading-tight">
+            Peta Global
+          </h1>
+          <p className="font-mono text-slate-500 dark:text-slate-400 text-xs tracking-widest uppercase">
+            Pemantauan Titik Destinasi & Navigasi
+          </p>
+        </div>
       </div>
-      
-      <div className="w-full h-full">
-        {!loading && (
-           <MapComponent 
-             markers={markers} 
-             center={mapCenter} 
-             focusSlug={focusSlug}
-             routeDestinations={routeDestinations}
-           />
-        )}
+
+      <div className="flex-1 relative border border-white/40 dark:border-white/10 shadow-xl overflow-hidden bg-white/60 dark:bg-[#111111]/60 backdrop-blur-2xl rounded-[2.5rem] z-0 p-2 md:p-4">
+        <div className="w-full h-full rounded-[2rem] overflow-hidden relative">
+          {!loading && (
+             <MapComponent 
+               markers={markers} 
+               center={mapCenter} 
+               focusSlug={focusSlug}
+               routeDestinations={routeDestinations}
+             />
+          )}
+        </div>
       </div>
     </div>
   );

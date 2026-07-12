@@ -4,78 +4,77 @@ import { useState, useEffect } from 'react';
 
 export default function LiveCCTVPage() {
   const [isLoading, setIsLoading] = useState(true);
-  const [iframeKey, setIframeKey] = useState(0);
-  const proxyUrl = process.env.NEXT_PUBLIC_API_URL + '/cctv-proxy';
-  const fullUrl = `${proxyUrl}?t=${Date.now()}`;
+  const [timestamp, setTimestamp] = useState<number>(0);
 
   useEffect(() => {
-    // Hanya jalan sekali saat component mount
-    setIsLoading(true);
-    
     const timer = setTimeout(() => {
+      setTimestamp(Date.now());
       setIsLoading(false);
-    }, 3000);
-    
+    }, 500);
+
     return () => clearTimeout(timer);
-  }, []); // Empty dependency = cuma jalan sekali
+  }, []);
 
   const handleRefresh = () => {
     setIsLoading(true);
-    setIframeKey(prev => prev + 1); // Ganti key untuk reload iframe
-    setTimeout(() => setIsLoading(false), 3000);
+    setTimeout(() => {
+      setTimestamp(Date.now());
+      setIsLoading(false);
+    }, 500);
   };
 
+  const proxyUrl = process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL}/cctv-proxy` : '';
+  const fullUrl = timestamp ? `${proxyUrl}?t=${timestamp}` : '';
+
   return (
-    <div className="h-screen flex flex-col bg-slate-50 dark:bg-brutal-dark overflow-hidden">
-      {/* Header Aplikasi */}
-      <div className="p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center z-50 shadow-sm shrink-0">
-        <div>
-          <h1 className="text-sm md:text-lg font-bold text-slate-900 dark:text-white uppercase tracking-tight">
-            LIVE CCTV YOGYAKARTA
-          </h1>
-          <p className="text-[10px] text-slate-500 font-mono">
-            {isLoading ? 'Loading...' : 'Live View Active'}
-          </p>
-        </div>
-
-        <button
-          onClick={handleRefresh}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded flex items-center gap-2"
-        >
-          <svg className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          RELOAD
-        </button>
-      </div>
-
-      {/* Iframe Container dengan CROP */}
-      <div className="flex-1 relative overflow-hidden bg-slate-200 dark:bg-slate-800">
-        {isLoading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm">
-            <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="font-mono text-sm text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest">
-              Loading CCTV...
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-slate-100 selection:bg-slate-900 selection:text-white dark:selection:bg-white dark:selection:text-black transition-colors duration-500">
+      <div className="fixed inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.05]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }} />
+      
+      <div className="max-w-7xl mx-auto px-4 py-12 relative z-10">
+        <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <h1 className="text-4xl md:text-6xl font-serif font-bold tracking-tight mb-2 drop-shadow-sm">
+              Pemantauan CCTV
+            </h1>
+            <p className="font-mono text-xs tracking-widest uppercase opacity-60">
+              Lalu Lintas & Area Publik Real-Time
             </p>
           </div>
-        )}
+          
+          <button 
+            onClick={handleRefresh}
+            className="px-6 py-3 bg-slate-900 text-white dark:bg-white dark:text-black rounded-full font-mono text-[10px] font-bold uppercase tracking-widest hover:scale-105 transition-transform shadow-lg w-fit"
+          >
+            Muat Ulang Sinyal
+          </button>
+        </header>
 
-        <div className="absolute inset-0 overflow-hidden">
-          <iframe
-            key={iframeKey}
-            src={fullUrl}
-            className="w-full h-full border-0"
-            title="CCTV Proxy"
-            onLoad={() => setIsLoading(false)}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
-            style={{
-              transform: 'translateY(-70px) scale(1.05)',
-              transformOrigin: 'top center',
-              width: '100%',
-              height: 'calc(100% + 70px)',
-            }}
-          />
-        </div>
+        <main className="relative w-full animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
+          <div className="bg-white/60 dark:bg-[#111111]/60 backdrop-blur-2xl p-4 md:p-8 rounded-[2.5rem] border border-white/40 dark:border-white/10 shadow-xl">
+            <div className="relative w-full aspect-video rounded-4xl overflow-hidden bg-slate-200 dark:bg-slate-800 border border-white/60 dark:border-white/10 shadow-inner">
+              
+              {isLoading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/60 dark:bg-black/60 backdrop-blur-md">
+                  <div className="w-12 h-12 border-4 border-slate-900/30 dark:border-white/30 border-t-slate-900 dark:border-t-white rounded-full animate-spin mb-4" />
+                  <p className="font-mono text-[10px] tracking-widest uppercase font-bold text-slate-800 dark:text-slate-200">
+                    Menyambungkan Sinyal...
+                  </p>
+                </div>
+              )}
+
+              {fullUrl && (
+                <iframe
+                  key={timestamp}
+                  src={fullUrl}
+                  className={`w-full h-full border-0 transition-opacity duration-1000 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+                  allowFullScreen
+                  onLoad={() => setIsLoading(false)}
+                />
+              )}
+
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
