@@ -1,8 +1,9 @@
 // app/components/WeatherWidget.tsx
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom'; // ✅ IMPORT PORTAL INI
+import { createPortal } from 'react-dom';
 import { getCurrentWeather, getForecast, getWeatherIconUrl, formatDate } from '../lib/weather';
 
 interface WeatherData {
@@ -49,49 +50,51 @@ export default function WeatherWidget() {
     return () => { document.body.style.overflow = 'unset'; };
   }, [showDetail]);
 
+  // ✅ FIX 1: Memasukkan deklarasi fungsi ke dalam useEffect agar tidak error immutability & deps
   useEffect(() => {
+    const loadDiyWeather = async () => {
+      const weatherData: {[key: string]: WeatherData | null} = {};
+      for (const region of DIY_REGIONS) {
+        try {
+          const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+          const res = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?lat=${region.lat}&lon=${region.lon}&appid=${API_KEY}&units=metric&lang=id`,
+            { next: { revalidate: 300 } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            weatherData[region.name] = {
+              temp: Math.round(data.main.temp),
+              feels_like: Math.round(data.main.feels_like),
+              humidity: data.main.humidity,
+              description: data.weather[0].description,
+              icon: data.weather[0].icon,
+              wind_speed: data.wind.speed,
+              city: region.name,
+            };
+          }
+        } catch {
+          // ✅ FIX 2: Menghapus (error) karena tidak dipakai
+          weatherData[region.name] = null;
+        }
+      }
+      setDiyWeather(weatherData);
+    };
+
+    const loadWeather = async () => {
+      setLoading(true);
+      const [current, forecastData] = await Promise.all([
+        getCurrentWeather(),
+        getForecast(),
+      ]);
+      setWeather(current);
+      setForecast(forecastData);
+      setLoading(false);
+      loadDiyWeather();
+    };
+
     loadWeather();
   }, []);
-
-  const loadWeather = async () => {
-    setLoading(true);
-    const [current, forecastData] = await Promise.all([
-      getCurrentWeather(),
-      getForecast(),
-    ]);
-    setWeather(current);
-    setForecast(forecastData);
-    setLoading(false);
-    loadDiyWeather();
-  };
-
-  const loadDiyWeather = async () => {
-    const weatherData: {[key: string]: WeatherData | null} = {};
-    for (const region of DIY_REGIONS) {
-      try {
-        const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
-        const res = await fetch(
-          `https://api.openweathermap.org/data/2.5/weather?lat=${region.lat}&lon=${region.lon}&appid=${API_KEY}&units=metric&lang=id`,
-          { next: { revalidate: 300 } }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          weatherData[region.name] = {
-            temp: Math.round(data.main.temp),
-            feels_like: Math.round(data.main.feels_like),
-            humidity: data.main.humidity,
-            description: data.weather[0].description,
-            icon: data.weather[0].icon,
-            wind_speed: data.wind.speed,
-            city: region.name,
-          };
-        }
-      } catch (error) {
-        weatherData[region.name] = null;
-      }
-    }
-    setDiyWeather(weatherData);
-  };
 
   if (loading) {
     return <div className="animate-pulse flex items-center gap-3 p-3 rounded-xl bg-white/60 shadow-sm w-fit">
@@ -102,16 +105,16 @@ export default function WeatherWidget() {
 
   if (!weather) return <div className="text-xs text-slate-500">Cuaca tidak tersedia</div>;
 
-  // ✅ ISI MODAL
-  const ModalContent = () => (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
-      {/* 1. Background Hitam Full Screen (Ini yang sebelumnya ketumpuk) */}
+  // ✅ FIX 3: Mengubah komponen () => menjadi variabel JSX biasa agar React tidak bingung
+  const modalContent = (
+    <div className="fixed inset-0 z-99999 flex items-center justify-center p-4">
+      {/* 1. Background Hitam Full Screen */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
         onClick={() => setShowDetail(false)}
       ></div>
       
-      {/* 2. Konten Modal (Posisi di atas background) */}
+      {/* 2. Konten Modal */}
       <div 
         className="relative bg-white dark:bg-slate-900 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl z-10 border border-white/10"
         onClick={(e) => e.stopPropagation()}
@@ -195,7 +198,7 @@ export default function WeatherWidget() {
         onClick={() => setShowDetail(true)}
         className="flex items-center gap-3 p-3 rounded-xl bg-white/60 dark:bg-slate-800/60 hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all cursor-pointer shadow-sm hover:shadow-md border border-white/20 dark:border-slate-700/50"
       >
-        <div className="relative flex-shrink-0">
+        <div className="relative shrink-0">
           <img src={getWeatherIconUrl(weather.icon)} alt="" className="w-10 h-10" />
           <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white"></div>
         </div>
@@ -204,13 +207,13 @@ export default function WeatherWidget() {
             <span className="text-xl font-bold text-slate-900 dark:text-white">{weather.temp}°C</span>
             <span className="text-[10px] text-slate-500 hidden sm:inline">{weather.city}</span>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 capitalize truncate max-w-[100px]">{weather.description}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 capitalize truncate max-w-25">{weather.description}</p>
         </div>
       </button>
 
-      {/* ✅ RENDER MODAL MELALUI PORTAL (Supaya keluar dari Card Selamat Datang) */}
+      {/* RENDER MODAL MELALUI PORTAL */}
       {showDetail && typeof document !== 'undefined' && createPortal(
-        <ModalContent />,
+        modalContent,
         document.body
       )}
     </>

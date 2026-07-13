@@ -11,6 +11,16 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'hamemayu.id',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'admin.hamemayu.id',
+        pathname: '/storage/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'images.unsplash.com',
       },
       {

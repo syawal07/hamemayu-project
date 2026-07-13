@@ -12,12 +12,10 @@ class EventController extends Controller
 {
     public function __construct(protected EventItineraryService $itineraryService) {}
 
-    // ✅ 1. LIST EVENTS + FILTER & SORTING
     public function index(Request $request)
     {
         $query = Event::where('is_active', true);
 
-        // Filter Status
         if ($request->filled('status')) {
             $now = now();
             $query->where(function ($q) use ($request, $now) {
@@ -31,7 +29,6 @@ class EventController extends Controller
             });
         }
 
-        // Filter Bulan/Tahun
         if ($request->filled('month') && $request->filled('year')) {
             $query->where(function ($q) use ($request) {
                 $q->whereYear('start_date', $request->year)->whereMonth('start_date', $request->month)
@@ -39,42 +36,34 @@ class EventController extends Controller
             });
         }
 
-        // Filter Kategori
         if ($request->filled('category') && $request->category !== 'all') {
             $query->where('category', $request->category);
         }
 
-        // Search
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(fn ($q) => $q->where('title', 'like', "%{$search}%")->orWhere('location_name', 'like', "%{$search}%"));
         }
 
-        // Sorting
         $sortField = in_array($request->sort, ['start_date', 'ticket_price', 'title', 'created_at']) ? $request->sort : 'start_date';
         $query->orderBy($sortField, $request->direction === 'asc' ? 'asc' : 'desc');
 
         $events = $query->paginate($request->per_page ?? 12);
 
-        // Transform Response
         $events->getCollection()->transform(fn ($e) => $this->formatEvent($e));
 
         return response()->json($events);
     }
 
-    // ✅ 2. CALENDAR DATA (Grouped by Date) - SEKARANG DENGAN FILTER
     public function calendar(Request $request)
     {
         $year = $request->year ?? now()->year;
         $month = $request->month ?? now()->month;
         
-        // ✅ QUERY DASAR
         $query = Event::where('is_active', true)
             ->where(function ($q) use ($year, $month) {
-                // Event yang mulai di bulan ini
                 $q->whereYear('start_date', $year)
                 ->whereMonth('start_date', $month)
-                // ATAU event yang berakhir di bulan ini (multi-day events)
                 ->orWhere(function ($sq) use ($year, $month) {
                     $sq->whereNotNull('end_date')
                         ->whereYear('end_date', $year)
@@ -82,18 +71,16 @@ class EventController extends Controller
                 });
             });
         
-        // ✅ FILTER KATEGORI (KALAU ADA)
         if ($request->filled('category') && $request->category !== 'all') {
             $query->where('category', $request->category);
         }
         
         $events = $query->get();
         
-        // ... (sisanya sama seperti sebelumnya)
         $grouped = [];
         foreach ($events as $e) {
-            $start = $e->start_date->copy();
-            $end = $e->end_date ? $e->end_date->copy() : $e->start_date->copy();
+            $start = \Carbon\Carbon::parse($e->start_date);
+            $end = $e->end_date ? \Carbon\Carbon::parse($e->end_date) : \Carbon\Carbon::parse($e->start_date);
             
             while ($start->lte($end)) {
                 $dateKey = $start->format('Y-m-d');
@@ -101,7 +88,7 @@ class EventController extends Controller
                     'id' => $e->id,
                     'slug' => $e->slug,
                     'title' => $e->title,
-                    'image' => $e->image ? Storage::disk('public')->url($e->image) : null,
+                    'image' => $e->image ? asset('storage/' . $e->image) : null,
                     'category' => $e->category,
                     'time' => $e->start_time ? substr($e->start_time, 0, 5) : 'All Day'
                 ];
@@ -109,7 +96,6 @@ class EventController extends Controller
             }
         }
         
-        // ... (generate calendar days tetap sama)
         $daysInMonth = \Carbon\Carbon::create($year, $month, 1)->daysInMonth;
         $calendarDays = [];
         for ($day = 1; $day <= $daysInMonth; $day++) {
@@ -124,15 +110,13 @@ class EventController extends Controller
         return response()->json(['year' => $year, 'month' => $month, 'days' => $calendarDays]);
     }
 
-    // ✅ 3. DETAIL EVENT
-    public function show($slug)
+    public function show(string $slug)
     {
         $event = Event::where('slug', $slug)->where('is_active', true)->firstOrFail();
         return response()->json($this->formatEvent($event, true));
     }
 
-    // ✅ 4. CHECK ITINERARY CONFLICT
-    public function checkConflict(Request $request, $eventId)
+    public function checkConflict(Request $request, int $eventId)
     {
         $request->validate([
             'itinerary_id' => 'required|exists:itineraries,id',
@@ -157,12 +141,10 @@ class EventController extends Controller
         ]);
     }
 
-    // HELPER: Format Event Response (SAFE VERSION)
     private function formatEvent(Event $event, bool $detailed = false): array
     {
-        // Helper function buat format date safely
-        $safeDate = fn($value, $format = 'Y-m-d') => $value ? (is_string($value) ? $value : $value->format($format)) : null;
-        $safeTime = fn($value) => $value ? (is_string($value) ? substr($value, 0, 5) : $value->format('H:i')) : null;
+        $safeDate = fn($value, $format = 'Y-m-d') => $value ? \Carbon\Carbon::parse($value)->format($format) : null;
+        $safeTime = fn($value) => $value ? (is_string($value) ? substr($value, 0, 5) : \Carbon\Carbon::parse($value)->format('H:i')) : null;
 
         $base = [
             'id' => $event->id,
@@ -176,8 +158,8 @@ class EventController extends Controller
             'location_name' => $event->location_name,
             'ticket_price' => $event->ticket_price ? (float) $event->ticket_price : 0.00,
             'is_active' => $event->is_active,
-            'status' => $event->status, // Ini dari accessor Model, aman
-            'image' => $event->image ? Storage::disk('public')->url($event->image) : null,
+            'status' => $event->status,
+            'image' => $event->image ? asset('storage/' . $event->image) : null,
         ];
 
         if ($detailed) {
@@ -195,17 +177,15 @@ class EventController extends Controller
                 'map_embed_url' => $event->map_embed_url,
                 'gallery' => $event->gallery ? collect($event->gallery)
                     ->map(function ($img) {
-                        // Kalau $img adalah array, ambil value pertama atau skip
                         if (is_array($img)) {
                             $img = $img['url'] ?? $img[0] ?? null;
                         }
-                        // Kalau $img string & bukan URL lengkap, generate URL storage
                         if (is_string($img) && !str_starts_with($img, 'http')) {
-                            return Storage::disk('public')->url($img);
+                            return asset('storage/' . $img);
                         }
-                        return $img; // Return as-is kalau udah URL lengkap
+                        return $img;
                     })
-                    ->filter() // Hapus null values
+                    ->filter()
                     ->values()
                     ->toArray() : [],
             ]);

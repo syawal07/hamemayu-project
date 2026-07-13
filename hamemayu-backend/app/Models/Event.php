@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Builder;
 
 class Event extends Model
 {
@@ -20,9 +21,9 @@ class Event extends Model
     ];
 
     protected $casts = [
-        'start_date' => 'date',      // Harus 'date', bukan 'string'
+        'start_date' => 'date',
         'end_date' => 'date',
-        'start_time' => 'string',    // Time tetap string (HH:MM:SS)
+        'start_time' => 'string',
         'end_time' => 'string',
         'published_at' => 'datetime',
         'is_active' => 'boolean',
@@ -32,38 +33,43 @@ class Event extends Model
     ];
 
     protected static function boot()
-{
-    parent::boot();
-    
-    static::saving(function ($event) {
-        // Auto isi published_at saat event pertama kali di-publish
-        if ($event->is_active && is_null($event->published_at)) {
-            $event->published_at = now();
-        }
-    });
-}
+    {
+        parent::boot();
+        
+        static::saving(function ($event) {
+            if ($event->is_active && is_null($event->published_at)) {
+                $event->published_at = now();
+            }
+        });
+    }
 
-    // Auto generate slug
-    public function setTitleAttribute($value)
+    public function setTitleAttribute(string $value)
     {
         $this->attributes['title'] = $value;
         $this->attributes['slug'] = Str::slug($value);
     }
 
-    // STATUS OTOMATIS (Ongoing, Upcoming, Past)
     public function getStatusAttribute()
     {
-        $now = now();
-        $start = $this->start_date->copy()->setTimeFromTimeString($this->start_time ?? '00:00:00');
-        $end = ($this->end_date ? $this->end_date->copy() : $this->start_date->copy())
-                ->setTimeFromTimeString($this->end_time ?? '23:59:59');
+        if (!$this->start_date) return 'upcoming';
 
-        if ($now >= $start && $now <= $end) return 'ongoing';
-        if ($now > $end) return 'past';
-        return 'upcoming';
+        try {
+            $now = now();
+            $startTime = !empty($this->start_time) ? $this->start_time : '00:00:00';
+            $endTime = !empty($this->end_time) ? $this->end_time : '23:59:59';
+            
+            $start = \Carbon\Carbon::parse($this->start_date)->setTimeFromTimeString($startTime);
+            $endDate = $this->end_date ? $this->end_date : $this->start_date;
+            $end = \Carbon\Carbon::parse($endDate)->setTimeFromTimeString($endTime);
+
+            if ($now >= $start && $now <= $end) return 'ongoing';
+            if ($now > $end) return 'past';
+            return 'upcoming';
+        } catch (\Throwable $th) {
+            return 'upcoming';
+        }
     }
 
-    // GOOGLE MAPS EMBED URL
     public function getMapEmbedUrlAttribute()
     {
         if ($this->location_lat && $this->location_lng) {
@@ -72,46 +78,54 @@ class Event extends Model
         return null;
     }
 
-    // FULL DATETIME HELPERS
     public function getStartDatetimeAttribute()
     {
-        return $this->start_date->copy()->setTimeFromTimeString($this->start_time ?? '00:00:00');
+        if (!$this->start_date) return null;
+        try {
+            return \Carbon\Carbon::parse($this->start_date)->setTimeFromTimeString(!empty($this->start_time) ? $this->start_time : '00:00:00');
+        } catch (\Throwable $th) {
+            return \Carbon\Carbon::parse($this->start_date);
+        }
     }
 
     public function getEndDatetimeAttribute()
     {
-        $date = $this->end_date ? $this->end_date->copy() : $this->start_date->copy();
-        return $date->setTimeFromTimeString($this->end_time ?? '23:59:59');
+        if (!$this->start_date && !$this->end_date) return null;
+        try {
+            $endDate = $this->end_date ? $this->end_date : $this->start_date;
+            return \Carbon\Carbon::parse($endDate)->setTimeFromTimeString(!empty($this->end_time) ? $this->end_time : '23:59:59');
+        } catch (\Throwable $th) {
+            return $this->end_date ? \Carbon\Carbon::parse($this->end_date) : null;
+        }
     }
 
-    // SCOPES FILTER & SORTING
-    public function scopePublished($query)
+    public function scopePublished(Builder $query)
     {
         return $query->where('is_active', true)->whereNotNull('published_at');
     }
 
-    public function scopeByCategory($query, $category)
+    public function scopeByCategory(Builder $query, string $category)
     {
         return $category === 'all' ? $query : $query->where('category', $category);
     }
 
-    public function scopeByStatus($query, $status)
+    public function scopeByStatus(Builder $query, string $status)
     {
-        return $query->having('status', $status); // Perlu groupBy atau filter di collection jika pakai accessor
+        return $query->having('status', $status);
     }
 
-    public function scopeSearch($query, $keyword)
+    public function scopeSearch(Builder $query, string $keyword)
     {
-        return $query->where(function ($q) use ($keyword) {
+        return $query->where(function (Builder $q) use ($keyword) {
             $q->where('title', 'like', "%{$keyword}%")
               ->orWhere('location_name', 'like', "%{$keyword}%")
               ->orWhere('organizer_name', 'like', "%{$keyword}%");
         });
     }
 
-    // RELASI POLYMORPHIC KE ITINERARY
     public function itineraryItems()
     {
-        return $this->morphMany(ItineraryItem::class, 'plannable');
+        $related = 'App\Models\ItineraryItem';
+        return $this->morphMany($related, 'plannable');
     }
 }
