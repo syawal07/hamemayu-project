@@ -1,10 +1,33 @@
 const isServer = typeof window === 'undefined';
 
-export const API_BASE_URL = isServer 
-  ? process.env.API_URL || 'http://laravel.test:80/api/v1'
-  : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:80/api/v1';
+// Helper: Ambil env variable dengan fallback dinamis
+const getEnv = (clientKey: string, serverKey?: string, fallback?: string): string => {
+  // Server-side: bisa baca semua env vars
+  if (isServer && serverKey && process.env[serverKey]) {
+    return process.env[serverKey]!;
+  }
+  
+  // Client-side: NEXT_PUBLIC_ vars dari env
+  if (process.env[clientKey]) {
+    return process.env[clientKey]!;
+  }
+  
+  // Fallback dinamis: pakai window.location.origin (ikut domain saat ini)
+  if (!isServer && typeof window !== 'undefined') {
+    const origin = window.location.origin; // e.g., "https://hamemayu.id"
+    if (clientKey.includes('API_URL')) return `${origin}/api/v1`;
+    if (clientKey.includes('STORAGE')) return `${origin}/storage`;
+    return origin;
+  }
+  
+  // Last resort fallback
+  return fallback || '';
+};
 
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:80';
+// Export URLs - fallback aman ke dynamic origin
+export const API_BASE_URL = getEnv('NEXT_PUBLIC_API_URL', 'API_URL', 'https://hamemayu.id/api/v1');
+export const BACKEND_URL = getEnv('NEXT_PUBLIC_BACKEND_URL', undefined, 'https://hamemayu.id');
+export const STORAGE_URL = getEnv('NEXT_PUBLIC_STORAGE_URL', undefined, 'https://hamemayu.id/storage');
 
 interface FetchOptions extends RequestInit {
   requireAuth?: boolean;

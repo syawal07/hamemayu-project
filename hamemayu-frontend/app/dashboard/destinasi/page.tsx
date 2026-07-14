@@ -30,7 +30,10 @@ const fixImageUrl = (url: string | null): string | null => {
   if (!url) return null;
   if (url.startsWith('http')) return url;
   
-  const storageUrl = process.env.NEXT_PUBLIC_STORAGE_URL || 'http://localhost/storage';
+  const storageUrl = process.env.NEXT_PUBLIC_STORAGE_URL;
+    if (!storageUrl) {
+    throw new Error('NEXT_PUBLIC_STORAGE_URL must be set in .env');
+  }
   return `${storageUrl}/${url}`;
 };
 

@@ -36,7 +36,10 @@ interface MapMarker {
   lng: number | string;
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+if (!BACKEND_URL) {
+  throw new Error('NEXT_PUBLIC_BACKEND_URL must be set in .env');
+}
 const STORAGE_URL = `${BACKEND_URL}/storage`;
 
 export default function WishlistPage() {

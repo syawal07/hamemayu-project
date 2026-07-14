@@ -6,7 +6,10 @@ import CategoryTabs from './CategoryTabs';
 import EventCard from './EventCard';
 import type { Event, CalendarDay } from '../../types/event';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
+if (!API_BASE) {
+  throw new Error('NEXT_PUBLIC_API_URL must be set in .env');
+}
 
 interface WishlistEntry {
   wishlistId: number;

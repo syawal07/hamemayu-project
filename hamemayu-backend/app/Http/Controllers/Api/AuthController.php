@@ -45,11 +45,13 @@ class AuthController extends Controller
 
             $token = $user->createToken('hamemayu-user-token')->plainTextToken;
 
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+            //$frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+	    $frontendUrl = env('FRONTEND_URL', request()->getScheme() . '://' . request()->getHttpHost());
             return redirect()->away($frontendUrl . '/auth/callback?token=' . $token);
 
         } catch (\Exception $e) {
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+            //$frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+            $frontendUrl = env('FRONTEND_URL', request()->getScheme() . '://' . request()->getHttpHost());
             return redirect()->away($frontendUrl . '/login?error=google_auth_failed');
         }
     }

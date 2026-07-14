@@ -28,7 +28,10 @@ const fixImageUrl = (url: string | null): string | null => {
   }
   
   // Kalau relative path, prepend storage URL dari env
-  const storageUrl = process.env.NEXT_PUBLIC_STORAGE_URL || 'http://localhost/storage';
+  const storageUrl = process.env.NEXT_PUBLIC_STORAGE_URL;
+  if (!storageUrl) {
+    throw new Error('NEXT_PUBLIC_STORAGE_URL must be set in frontend/.env');
+  }
   return `${storageUrl}/${url}`;
 };
 
@@ -129,14 +132,19 @@ export default function DetailDestinasiPage() {
                 priority
                 unoptimized
                 onError={(e) => {
-                  // Fallback kalau gambar error
                   const target = e.target as HTMLImageElement;
                   if (!target.dataset.fallback) {
                     target.dataset.fallback = 'true';
-                    // Coba fallback ke URL sederhana
                     const fileName = data.cover_image?.replace(/^.*\/(contents|events)\//, '');
-                    target.src = `http://localhost/storage/contents/${fileName}`;
-                  }
+    
+                    // DARI .ENV (no fallback!)
+                    const storageUrl = process.env.NEXT_PUBLIC_STORAGE_URL;
+                    if (!storageUrl) {
+                      console.error('NEXT_PUBLIC_STORAGE_URL not set, cannot fallback image');
+                      return;
+                    }
+                    target.src = `${storageUrl}/contents/${fileName}`;
+                   }
                 }}
               />
               <div className="absolute inset-0 bg-linear-to-t from-slate-900/90 via-slate-900/30 to-transparent" />

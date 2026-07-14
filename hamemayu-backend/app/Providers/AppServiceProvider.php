@@ -11,6 +11,7 @@ use App\Repositories\Contracts\WishlistRepositoryInterface;
 use App\Repositories\WishlistRepository;
 use App\Repositories\Contracts\ItineraryRepositoryInterface;
 use App\Repositories\ItineraryRepository;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,5 +25,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+    	if (env('FORCE_HTTPS', false)) {
+        	URL::forceScheme('https');
+    	}
     }
 }
