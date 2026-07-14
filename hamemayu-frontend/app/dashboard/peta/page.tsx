@@ -27,9 +27,9 @@ const MapComponent = dynamic(
   { 
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white/40 dark:bg-black/20 backdrop-blur-xl animate-pulse rounded-[2.5rem]">
-        <div className="w-12 h-12 border-4 border-slate-900/30 dark:border-white/30 border-t-slate-900 dark:border-t-white rounded-full animate-spin mb-4" />
-        <p className="font-mono text-[10px] text-slate-500 font-bold uppercase tracking-widest">Menyiapkan Radar Peta...</p>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-xl animate-pulse">
+        <div className="w-10 h-10 border-4 border-slate-800/20 dark:border-white/20 border-t-slate-800 dark:border-t-white rounded-full animate-spin mb-3" />
+        <p className="font-mono text-[9px] text-slate-500 font-bold uppercase tracking-widest">Memuat Peta...</p>
       </div>
     )
   }
@@ -60,7 +60,7 @@ export default function PetaPage() {
           return parsed;
         }
       } catch (err) {
-        console.error('Gagal memproses parameter rute:', err);
+        console.error(err);
       }
     }
     return [];
@@ -72,9 +72,7 @@ export default function PetaPage() {
     const loadMarkers = async () => {
       try {
         const res = await fetchAPI<ContentItem[] | ApiListResponse>('/contents?per_page=100'); 
-        
         const dataArray = Array.isArray(res) ? res : (res as ApiListResponse)?.data || [];
-        
         const validMarkers = dataArray.filter((item: ContentItem) => item.lat !== null && item.lng !== null);
         
         if (isMounted) {
@@ -95,29 +93,27 @@ export default function PetaPage() {
   }, []);
 
   return (
-    <div className="animate-in fade-in duration-500 h-[calc(100vh-120px)] md:h-[calc(100vh-80px)] flex flex-col max-w-7xl mx-auto w-full pb-6 px-4 md:px-8">
-      <div className="mb-6 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4 mt-8">
-        <div>
-          <h1 className="text-4xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white mb-2 drop-shadow-sm leading-tight">
+    <div className="relative w-[calc(100%+2rem)] md:w-[calc(100%+4rem)] lg:w-[calc(100%+6rem)] h-[calc(100vh-60px)] md:h-screen -ml-4 -mt-4 md:-ml-8 md:-mt-8 lg:-ml-12 overflow-hidden bg-slate-50 dark:bg-[#0a0a0a] animate-in fade-in duration-500">
+      <div className="absolute top-4 left-4 md:top-6 md:left-6 z-1000 pointer-events-none">
+        <div className="bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border border-white/50 dark:border-slate-700/50 p-3 md:p-4 rounded-2xl shadow-lg pointer-events-auto inline-flex flex-col">
+          <h1 className="text-xl md:text-3xl font-serif font-bold text-slate-900 dark:text-white mb-0.5 md:mb-1 leading-none tracking-tight">
             Peta Global
           </h1>
-          <p className="font-mono text-slate-500 dark:text-slate-400 text-xs tracking-widest uppercase">
-            Pemantauan Titik Destinasi & Navigasi
+          <p className="font-mono text-slate-600 dark:text-slate-400 text-[8px] md:text-[9px] tracking-[0.2em] uppercase font-bold">
+            Pantau & Navigasi
           </p>
         </div>
       </div>
 
-      <div className="flex-1 relative border border-white/40 dark:border-white/10 shadow-xl overflow-hidden bg-white/60 dark:bg-[#111111]/60 backdrop-blur-2xl rounded-[2.5rem] z-0 p-2 md:p-4">
-        <div className="w-full h-full rounded-[2rem] overflow-hidden relative">
-          {!loading && (
-             <MapComponent 
-               markers={markers} 
-               center={mapCenter} 
-               focusSlug={focusSlug}
-               routeDestinations={routeDestinations}
-             />
-          )}
-        </div>
+      <div className="w-full h-full z-0 relative">
+        {!loading && (
+           <MapComponent 
+             markers={markers} 
+             center={mapCenter} 
+             focusSlug={focusSlug}
+             routeDestinations={routeDestinations}
+           />
+        )}
       </div>
     </div>
   );
