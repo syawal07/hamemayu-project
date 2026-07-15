@@ -22,19 +22,35 @@ class EventController extends Controller
                 if ($request->status === 'ongoing') {
                     $q->where('start_date', '<=', $now)->where(fn ($sq) => $sq->whereNull('end_date')->orWhere('end_date', '>=', $now));
                 } elseif ($request->status === 'upcoming') {
-                    $q->where('start_date', '>', $now);
+                    $q->where('start_date', '>=', $now);
                 } elseif ($request->status === 'past') {
                     $q->where('end_date', '<', $now);
                 }
             });
         }
 
-        if ($request->filled('month') && $request->filled('year')) {
-            $query->where(function ($q) use ($request) {
-                $q->whereYear('start_date', $request->year)->whereMonth('start_date', $request->month)
-                  ->orWhere(fn ($sq) => $sq->whereNotNull('end_date')->whereYear('end_date', $request->year)->whereMonth('end_date', $request->month));
-            });
-        }
+        //if ($request->filled('month') && $request->filled('year')) {
+        //    $query->where(function ($q) use ($request) {
+        //        $q->whereYear('start_date', $request->year)->whereMonth('start_date', $request->month)
+        //          ->orWhere(fn ($sq) => $sq->whereNotNull('end_date')->whereYear('end_date', $request->year)->whereMonth('end_date', $request->month));
+        //    });
+        //} kalnder card bawah
+
+
+	if ($request->filled('month') && $request->filled('year')) {
+    	// Hitung tanggal pertama dan terakhir di bulan yang dipilih
+    	$startDateOfMonth = \Carbon\Carbon::create($request->year, $request->month, 1)->startOfDay();
+    	$endDateOfMonth = \Carbon\Carbon::create($request->year, $request->month, 1)->endOfMonth()->endOfDay();
+    
+   	 $query->where(function ($q) use ($startDateOfMonth, $endDateOfMonth) {
+        	// Event yang overlap dengan bulan yang dipilih
+        	$q->where('start_date', '<=', $endDateOfMonth)
+          	->where(function ($sq) use ($startDateOfMonth) {
+              	$sq->whereNull('end_date')
+                	 ->orWhere('end_date', '>=', $startDateOfMonth);
+          	});
+    	});
+	}
 
         if ($request->filled('category') && $request->category !== 'all') {
             $query->where('category', $request->category);
@@ -57,25 +73,32 @@ class EventController extends Controller
 
     public function calendar(Request $request)
     {
-        $year = $request->year ?? now()->year;
-        $month = $request->month ?? now()->month;
-        
-        $query = Event::where('is_active', true)
-            ->where(function ($q) use ($year, $month) {
-                $q->whereYear('start_date', $year)
-                ->whereMonth('start_date', $month)
-                ->orWhere(function ($sq) use ($year, $month) {
-                    $sq->whereNotNull('end_date')
-                        ->whereYear('end_date', $year)
-                        ->whereMonth('end_date', $month);
-                });
-            });
-        
-        if ($request->filled('category') && $request->category !== 'all') {
-            $query->where('category', $request->category);
-        }
-        
-        $events = $query->get();
+    $year = $request->year ?? now()->year;
+    $month = $request->month ?? now()->month;
+    
+    // Hitung tanggal pertama dan terakhir di bulan yang dipilih
+    $startDateOfMonth = \Carbon\Carbon::create($year, $month, 1)->startOfDay();
+    $endDateOfMonth = \Carbon\Carbon::create($year, $month, 1)->endOfMonth()->endOfDay();
+    
+    $query = Event::where('is_active', true)
+        ->where(function ($q) use ($startDateOfMonth, $endDateOfMonth) {
+            // Event yang:
+            // 1. Mulai sebelum/sama dengan akhir bulan DAN
+            // 2. Berakhir setelah/sama dengan awal bulan
+            // (atau tidak ada end_date = event ongoing)
+            $q->where('start_date', '<=', $endDateOfMonth)
+              ->where(function ($sq) use ($startDateOfMonth) {
+                  $sq->whereNull('end_date')
+                     ->orWhere('end_date', '>=', $startDateOfMonth);
+              });
+        });
+    
+    if ($request->filled('category') && $request->category !== 'all') {
+        $query->where('category', $request->category);
+    }
+    
+    $events = $query->get();
+
         
         $grouped = [];
         foreach ($events as $e) {
