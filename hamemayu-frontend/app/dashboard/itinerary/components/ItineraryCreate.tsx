@@ -1,368 +1,277 @@
-import { useState, useEffect } from 'react';
-import { fetchAPI } from '../../../lib/api';
-import { 
-  Category, 
-  SearchResultItem, 
-  ManualDestination, 
-  ItineraryGenerateResponse, 
-  ItineraryDay, 
-  ItinerarySlot 
-} from '../types';
+import { FormEvent } from 'react';
+import GlassCard from './ui/GlassCard';
+import RetroButton from './ui/RetroButton';
+import RetroBadge from './ui/RetroBadge';
 
-interface ItineraryCreateProps {
-  onComplete: () => void;
+interface Category {
+  id: number;
+  name: string;
+  slug: string;
 }
 
-interface RawApiItem {
+interface ManualDestination {
   id: number;
   title: string;
-  category?: { name: string };
-  excerpt?: string;
+  content_id: number;
+  category: string;
+  assigned_day?: number;
+  assigned_time?: string;
 }
 
-interface ApiResponse {
-  data?: RawApiItem[];
+interface ItinerarySummary {
+  total_days: number;
+  total_destinations: number;
+  estimated_total_budget: string;
+  highlights: string[];
 }
 
-export default function ItineraryCreate({ onComplete }: ItineraryCreateProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [formTitle, setFormTitle] = useState('Eksplorasi Nusantara');
-  const [startDate, setStartDate] = useState('');
-  const [startTime, setStartTime] = useState('08:00');
-  const [endDate, setEndDate] = useState('');
-  const [endTime, setEndTime] = useState('20:00');
-  const [formBudget, setFormBudget] = useState('hemat');
-  const [generateMode, setGenerateMode] = useState<'ai' | 'manual'>('ai');
-  const [useWishlist, setUseWishlist] = useState(false);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedResult, setGeneratedResult] = useState<ItineraryGenerateResponse | null>(null);
-  
-  const [manualDestinations, setManualDestinations] = useState<ManualDestination[]>([]);
-  const [showDestinationPicker, setShowDestinationPicker] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+interface ItinerarySlot {
+  title: string;
+  time_slot: string;
+  content_id?: number;
+  notes?: string;
+}
 
-  useEffect(() => {
-    fetchAPI<Category[]>('/categories').then(res => {
-      if (res && Array.isArray(res)) {
-        setCategories(res);
-        if (res.length > 0) setSelectedInterests([res[0].slug]);
-      }
-    });
-  }, []);
+interface ItineraryDay {
+  day: number;
+  theme?: string;
+  slots: ItinerarySlot[];
+  transport_tip?: string;
+}
 
-  const calculateDays = () => {
-    if (!startDate || !endDate) return 0;
-    const start = new Date(`${startDate}T${startTime}`);
-    const end = new Date(`${endDate}T${endTime}`);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-  };
+interface ItineraryGenerateResponse {
+  summary: ItinerarySummary;
+  days?: ItineraryDay[];
+}
 
-  const toggleInterest = (slug: string) => {
-    setSelectedInterests(prev => 
-      prev.includes(slug) ? prev.filter(i => i !== slug) : [...prev, slug]
-    );
-  };
+interface ItineraryCreateProps {
+  formTitle: string;
+  setFormTitle: (val: string) => void;
+  startDate: string;
+  setStartDate: (val: string) => void;
+  startTime: string;
+  setStartTime: (val: string) => void;
+  endDate: string;
+  setEndDate: (val: string) => void;
+  endTime: string;
+  setEndTime: (val: string) => void;
+  calculateDays: () => number;
+  generateMode: 'ai' | 'manual';
+  setGenerateMode: (mode: 'ai' | 'manual') => void;
+  manualDestinations: ManualDestination[];
+  setShowDestinationPicker: (show: boolean) => void;
+  removeDestinationFromManual: (id: number) => void;
+  setShowScheduler: (show: boolean) => void;
+  categories: Category[];
+  selectedInterests: string[];
+  toggleInterest: (slug: string) => void;
+  useWishlist: boolean;
+  setUseWishlist: (use: boolean) => void;
+  isGenerating: boolean;
+  handleGenerate: (e: FormEvent) => void;
+  generatedResult: ItineraryGenerateResponse | null;
+  handleSaveItinerary: () => void;
+}
 
-  const searchDestinations = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    
-    try {
-      // Menambahkan error handling aman agar tidak throw 500 error ke layar
-      let contents: RawApiItem[] = [];
-      let events: RawApiItem[] = [];
-      
-      try {
-        const contentsRes = await fetchAPI<ApiResponse | RawApiItem[]>(`/contents?search=${query}&limit=10`, { requireAuth: true });
-        contents = (Array.isArray(contentsRes) ? contentsRes : contentsRes?.data) || [];
-      } catch (e) {
-        console.warn('Pencarian destinasi gagal:', e);
-      }
-
-      try {
-        const eventsRes = await fetchAPI<ApiResponse | RawApiItem[]>(`/events?search=${query}&limit=10`, { requireAuth: true });
-        events = (Array.isArray(eventsRes) ? eventsRes : eventsRes?.data) || [];
-      } catch (e) {
-        console.warn('Pencarian event gagal:', e);
-      }
-      
-      const allResults: SearchResultItem[] = [
-        ...contents.map((item) => ({
-          id: item.id,
-          title: item.title,
-          type: 'destination' as const,
-          category: item.category || { name: 'Destinasi' },
-          excerpt: item.excerpt,
-        })),
-        ...events.map((item) => ({
-          id: item.id,
-          title: item.title,
-          type: 'event' as const,
-          category: item.category || { name: 'Event' },
-          excerpt: item.excerpt,
-        })),
-      ];
-      
-      setSearchResults(allResults);
-    } catch (error) {
-      console.error('Koneksi pencarian terputus:', error);
-    }
-  };
-
-  const addDestinationToManual = (destination: SearchResultItem) => {
-    if (!manualDestinations.find(d => d.id === destination.id)) {
-      setManualDestinations(prev => [...prev, {
-        id: destination.id,
-        title: destination.title,
-        content_id: destination.id,
-        category: destination.category?.name || 'Umum',
-      }]);
-    }
-    setShowDestinationPicker(false);
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
-  const removeDestinationFromManual = (id: number) => {
-    setManualDestinations(prev => prev.filter(d => d.id !== id));
-  };
-
-  const handleManualGenerate = () => {
-    if (manualDestinations.length === 0) { 
-      alert('Pilih minimal 1 destinasi!'); 
-      return; 
-    }
-    const days = calculateDays();
-    if (days <= 0) { 
-      alert('Format tanggal tidak valid atau minimal pilih 1 hari!'); 
-      return; 
-    }
-    
-    setIsGenerating(true);
-    try {
-      const daysArray: ItineraryDay[] = [];
-      
-      for (let dayNum = 1; dayNum <= days; dayNum++) {
-        daysArray.push({
-          day: dayNum,
-          theme: `Eksplorasi Hari ${dayNum}`,
-          slots: [],
-        });
-      }
-      
-      manualDestinations.forEach((dest, idx) => {
-        const targetDay = (idx % days) + 1;
-        const timeSlots = ['08:00', '11:00', '14:00', '16:00', '19:00'];
-        const dayIndex = targetDay - 1;
-        const slotIndex = daysArray[dayIndex].slots.length % timeSlots.length;
-        
-        daysArray[dayIndex].slots.push({
-          content_id: dest.content_id,
-          title: dest.title,
-          time_slot: timeSlots[slotIndex],
-        });
-      });
-      
-      const budgetRanges = {
-        hemat: { min: 150000, max: 300000 },
-        normal: { min: 300000, max: 600000 },
-        mewah: { min: 600000, max: 1200000 },
-      };
-      
-      const budgetRange = budgetRanges[formBudget as keyof typeof budgetRanges] || budgetRanges.normal;
-      const minBudget = budgetRange.min * days;
-      const maxBudget = budgetRange.max * days;
-      const formatRupiah = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
-      
-      setGeneratedResult({
-        summary: {
-          total_days: days,
-          total_destinations: manualDestinations.length,
-          estimated_total_budget: `${formatRupiah(minBudget)} - ${formatRupiah(maxBudget)}`,
-          highlights: manualDestinations.map(d => d.title).slice(0, 5),
-        },
-        days: daysArray,
-      });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleGenerateAI = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const days = calculateDays();
-
-    if (days <= 0 || days > 7) { 
-      alert('Sistem saat ini hanya mendukung 1 hingga 7 hari eksplorasi. Silakan sesuaikan tanggal!'); 
-      return; 
-    }
-    if (selectedInterests.length === 0) { 
-      alert("Pilih minimal satu minat fokus!"); 
-      return; 
-    }
-    
-    setIsGenerating(true);
-    setGeneratedResult(null);
-    
-    try {
-      const payload = {
-        start_date: `${startDate} ${startTime}:00`,
-        end_date: `${endDate} ${endTime}:00`,
-        days: days, // ✅ INI SOLUSI UNTUK ERROR 422 (Wajib ada untuk Backend)
-        mode: 'ai',
-        budget: formBudget,
-        use_wishlist: useWishlist,
-        interests: selectedInterests
-      };
-      
-      const res = await fetchAPI<ItineraryGenerateResponse>('/itinerary/generate', {
-        method: 'POST', 
-        requireAuth: true, 
-        body: JSON.stringify(payload)
-      });
-      
-      if (res) setGeneratedResult(res);
-    } catch (error) {
-      console.error(error);
-      alert('Gagal menghasilkan rute AI. Cek koneksi atau parameter pencarian.');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleSaveItinerary = async () => {
-    if (!generatedResult || !startDate || !endDate) return;
-    
-    const startDateTime = `${startDate} ${startTime || '00:00'}:00`;
-    const endDateTime = `${endDate} ${endTime || '23:59'}:00`;
-    const daysArray = generatedResult.days || [];
-    
-    const totalDestinations = daysArray.reduce((acc, day) => acc + (day.slots?.length || 0), 0);
-    
-    const payload = {
-      title: formTitle || 'Eksplorasi Nusantara',
-      start_date: startDateTime,
-      end_date: endDateTime,
-      days: calculateDays(),
-      budget_type: formBudget,
-      total_destinations: totalDestinations,
-      estimated_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
-      itinerary_data: {
-        summary: {
-          total_days: calculateDays(),
-          total_destinations: totalDestinations,
-          estimated_total_budget: generatedResult.summary.estimated_total_budget || 'Rp 0',
-          highlights: generatedResult.summary.highlights || [],
-        },
-        days: daysArray.map(day => ({
-          day: day.day,
-          theme: day.theme || `Hari ${day.day}`,
-          slots: (day.slots || []).map((slot: ItinerarySlot) => ({
-            content_id: slot.content_id || null,
-            title: slot.title || '',
-            time_slot: slot.time_slot || '08:00',
-            notes: slot.notes || '',
-          }))
-        }))
-      }
-    };
-
-    try {
-      await fetchAPI('/itinerary/save', {
-        method: 'POST',
-        requireAuth: true,
-        body: JSON.stringify(payload)
-      });
-      onComplete();
-    } catch (error: unknown) {
-      console.error(error);
-      const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan saat menyimpan.';
-      alert(`Gagal menyimpan: ${errorMessage}`);
-    }
-  };
+export default function ItineraryCreate({
+  formTitle,
+  setFormTitle,
+  startDate,
+  setStartDate,
+  startTime,
+  setStartTime,
+  endDate,
+  setEndDate,
+  endTime,
+  setEndTime,
+  calculateDays,
+  generateMode,
+  setGenerateMode,
+  manualDestinations,
+  setShowDestinationPicker,
+  removeDestinationFromManual,
+  setShowScheduler,
+  categories,
+  selectedInterests,
+  toggleInterest,
+  useWishlist,
+  setUseWishlist,
+  isGenerating,
+  handleGenerate,
+  generatedResult,
+  handleSaveItinerary
+}: ItineraryCreateProps) {
+  const inputStyle = "w-full p-3 rounded-xl border border-green-200/50 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-green-500/50 dark:focus:ring-yellow-400/50 focus:outline-none transition-all shadow-sm text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark]";
+  const labelStyle = "block font-mono text-[10px] font-bold mb-2 uppercase text-slate-600 dark:text-slate-400";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 animate-in fade-in duration-700">
-      <div className="lg:col-span-5 bg-white/60 dark:bg-[#111111]/60 backdrop-blur-2xl p-8 md:p-10 rounded-[2.5rem] border border-white/40 dark:border-white/10 h-fit shadow-xl">
-        <h2 className="font-serif text-2xl font-bold mb-8">Parameter Rencana</h2>
-        
-        <form onSubmit={generateMode === 'ai' ? handleGenerateAI : (e) => { e.preventDefault(); handleManualGenerate(); }} className="space-y-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <GlassCard className="lg:col-span-5 p-6 h-fit">
+        <h2 className="font-mono font-bold text-sm mb-6 uppercase text-slate-800 dark:text-white border-b border-green-200/50 dark:border-slate-700 pb-2">
+          Parameter Perjalanan
+        </h2>
+
+        <form onSubmit={handleGenerate} className="space-y-5">
           <div>
-            <label className="block font-mono text-[10px] tracking-widest uppercase mb-3 text-slate-500">Judul Perjalanan</label>
-            <input 
-              type="text" 
-              value={formTitle} 
-              onChange={(e) => setFormTitle(e.target.value)} 
-              className="w-full p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20 focus:outline-none focus:border-slate-400 dark:focus:border-white/30 transition-colors font-medium" 
-              required 
+            <label className={labelStyle}>Judul Perjalanan</label>
+            <input
+              type="text"
+              value={formTitle}
+              onChange={(e) => setFormTitle(e.target.value)}
+              className={inputStyle}
+              placeholder="Contoh: Liburan ke Jogja 2026"
+              required
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-mono text-[10px] tracking-widest uppercase mb-3 text-slate-500">Mulai</label>
-              <div className="space-y-2">
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20 focus:outline-none" required />
-                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20 focus:outline-none" />
-              </div>
+              <label className={labelStyle}>Mulai</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={inputStyle}
+                required
+              />
+              <input
+                type="time"
+                lang="id-ID"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className={`${inputStyle} mt-2 text-sm py-2`}
+              />
             </div>
             <div>
-              <label className="block font-mono text-[10px] tracking-widest uppercase mb-3 text-slate-500">Selesai</label>
-              <div className="space-y-2">
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20 focus:outline-none" required />
-                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20 focus:outline-none" />
-              </div>
+              <label className={labelStyle}>Selesai</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className={inputStyle}
+                required
+              />
+              <input
+                type="time"
+                lang="id-ID"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className={`${inputStyle} mt-2 text-sm py-2`}
+              />
             </div>
           </div>
 
           {calculateDays() > 0 && (
-            <div className={`p-4 rounded-2xl text-center ${calculateDays() > 7 ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-slate-900 dark:bg-white text-white dark:text-black'}`}>
-              <p className="font-mono text-[10px] tracking-widest uppercase font-bold">
-                Total Durasi: {calculateDays()} Hari
+            <div className="p-3 bg-green-50/50 dark:bg-yellow-900/10 rounded-xl border border-green-200 dark:border-yellow-900/30">
+              <p className="text-sm font-bold text-green-700 dark:text-yellow-400 text-center font-mono">
+                Total: {calculateDays()} Hari
               </p>
-              {calculateDays() > 7 && <p className="text-[9px] mt-1">Maksimal 7 hari diperbolehkan.</p>}
             </div>
           )}
 
           <div>
-            <label className="block font-mono text-[10px] tracking-widest uppercase mb-3 text-slate-500">Pilih Mesin</label>
-            <div className="flex gap-3 bg-slate-100 dark:bg-white/5 p-1.5 rounded-full">
-              <button 
-                type="button" 
-                onClick={() => setGenerateMode('ai')} 
-                className={`flex-1 py-3 rounded-full font-mono text-xs font-bold uppercase transition-all ${generateMode === 'ai' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+            <label className={labelStyle}>Mode Generate</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setGenerateMode('ai')}
+                className={`flex-1 p-3 rounded-xl border-2 text-xs font-bold font-mono uppercase transition-all ${
+                  generateMode === 'ai'
+                    ? 'border-green-500 bg-green-50 dark:bg-yellow-900/20 text-green-700 dark:text-yellow-400'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
               >
-                Kecerdasan Buatan
+                AI
               </button>
-              <button 
-                type="button" 
-                onClick={() => setGenerateMode('manual')} 
-                className={`flex-1 py-3 rounded-full font-mono text-xs font-bold uppercase transition-all ${generateMode === 'manual' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              <button
+                type="button"
+                onClick={() => setGenerateMode('manual')}
+                className={`flex-1 p-3 rounded-xl border-2 text-xs font-bold font-mono uppercase transition-all ${
+                  generateMode === 'manual'
+                    ? 'border-slate-800 dark:border-slate-400 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
               >
-                Pilihan Manual
+                Manual
               </button>
             </div>
           </div>
 
-          {generateMode === 'ai' ? (
-            <div className="space-y-6 animate-in slide-in-from-left-4 duration-500">
+          {generateMode === 'manual' && (
+            <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-mono text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                    Destinasi ({manualDestinations.length})
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowDestinationPicker(true)}
+                    className="px-3 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-md font-mono text-[10px] font-bold uppercase transition-colors"
+                  >
+                    + Tambah
+                  </button>
+                </div>
+
+                {manualDestinations.length === 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 italic">Belum ada destinasi dipilih.</p>
+                ) : (
+                  <ul className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                    {manualDestinations.map((dest, idx) => (
+                      <li key={`${dest.id}-${idx}`} className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg text-xs shadow-sm border border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 dark:text-white truncate">{dest.title}</p>
+                            <p className="text-[10px] text-slate-500">{dest.category}</p>
+                            {dest.assigned_day && (
+                              <p className="text-[10px] text-green-600 dark:text-yellow-400 mt-1 font-mono">
+                                Hari {dest.assigned_day} - {dest.assigned_time || 'Belum diatur'}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button type="button" onClick={() => setShowScheduler(true)} className="text-slate-400 hover:text-green-600 p-1 transition-colors" title="Atur Jadwal">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          </button>
+                          <button type="button" onClick={() => removeDestinationFromManual(dest.id)} className="text-slate-400 hover:text-red-500 p-1 transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <RetroButton
+                type="button"
+                fullWidth
+                disabled={manualDestinations.length === 0}
+                onClick={() => setShowScheduler(true)}
+              >
+                ATUR JADWAL MANUAL
+              </RetroButton>
+            </div>
+          )}
+
+          {generateMode === 'ai' && (
+            <div className="animate-in fade-in zoom-in-95 duration-300 space-y-4">
               <div>
-                <label className="block font-mono text-[10px] tracking-widest uppercase mb-3 text-slate-500">Fokus Minat</label>
+                <label className={labelStyle}>Minat / Kategori</label>
                 <div className="flex flex-wrap gap-2">
                   {categories.map(cat => (
-                    <button 
-                      key={cat.id} 
-                      type="button" 
-                      onClick={() => toggleInterest(cat.slug)} 
-                      className={`px-4 py-2 rounded-full font-mono text-[10px] font-bold uppercase transition-all ${selectedInterests.includes(cat.slug) ? 'bg-slate-900 text-white dark:bg-white dark:text-black shadow-md' : 'bg-white/50 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/10 hover:border-slate-400'}`}
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => toggleInterest(cat.slug)}
+                      className={`px-3 py-1.5 rounded-full font-mono text-[10px] font-bold uppercase transition-all shadow-sm ${
+                        selectedInterests.includes(cat.slug)
+                          ? 'bg-green-600 text-white border border-green-700 dark:bg-yellow-400 dark:text-slate-900 dark:border-yellow-500'
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-green-300 dark:hover:border-yellow-500'
+                      }`}
                     >
                       {cat.name}
                     </button>
@@ -370,161 +279,96 @@ export default function ItineraryCreate({ onComplete }: ItineraryCreateProps) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20">
-                <input 
-                  type="checkbox" 
-                  checked={useWishlist} 
-                  onChange={(e) => setUseWishlist(e.target.checked)} 
-                  className="w-5 h-5 accent-slate-900 rounded-md cursor-pointer" 
-                  id="wishlist-toggle"
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-green-200/50 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50">
+                <input
+                  type="checkbox"
+                  checked={useWishlist}
+                  onChange={(e) => setUseWishlist(e.target.checked)}
+                  className="w-4 h-4 accent-green-600 dark:accent-yellow-400"
                 />
-                <label htmlFor="wishlist-toggle" className="font-mono text-xs uppercase tracking-widest cursor-pointer select-none">Prioritaskan Wishlist</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Prioritaskan Wishlist saya
+                </label>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-              <div className="p-6 rounded-3xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-mono text-[10px] tracking-widest uppercase font-bold text-slate-500">Daftar Destinasi ({manualDestinations.length})</h3>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowDestinationPicker(!showDestinationPicker)} 
-                    className="px-4 py-2 bg-slate-900 text-white dark:bg-white dark:text-black font-mono text-[10px] font-bold uppercase rounded-full hover:scale-105 transition-transform"
-                  >
-                    {showDestinationPicker ? 'Tutup' : 'Tambah'}
-                  </button>
-                </div>
 
-                {showDestinationPicker && (
-                  <div className="mb-6 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 shadow-lg">
-                    <input 
-                      type="text" 
-                      placeholder="Cari destinasi..." 
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        searchDestinations(e.target.value);
-                      }}
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-black/50 text-sm font-medium mb-3 focus:outline-none"
-                    />
-                    <div className="max-h-40 overflow-y-auto space-y-2">
-                      {searchResults.map(item => (
-                        <div key={item.id} className="flex justify-between items-center p-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors" onClick={() => addDestinationToManual(item)}>
-                          <div>
-                            <p className="font-bold text-sm">{item.title}</p>
-                            <p className="font-mono text-[10px] text-slate-500 uppercase">{item.category.name}</p>
-                          </div>
-                          <span className="text-slate-400 font-mono text-lg">+</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {manualDestinations.length === 0 ? (
-                  <p className="text-xs font-mono text-slate-400 italic text-center py-4">Belum ada destinasi terpilih.</p>
-                ) : (
-                  <ul className="space-y-3">
-                    {manualDestinations.map((dest, idx) => (
-                      <li key={`${dest.id}-${idx}`} className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-4">
-                          <span className="font-serif text-lg font-bold text-slate-300 dark:text-slate-600">{String(idx + 1).padStart(2, '0')}</span>
-                          <div>
-                            <p className="font-bold text-sm">{dest.title}</p>
-                            <p className="font-mono text-[10px] text-slate-500 uppercase">{dest.category}</p>
-                          </div>
-                        </div>
-                        <button type="button" onClick={() => removeDestinationFromManual(dest.id)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors">
-                          ✕
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <RetroButton
+                type="submit"
+                fullWidth
+                disabled={isGenerating || !startDate || !endDate}
+              >
+                {isGenerating ? 'MEMPROSES...' : 'GENERATE ITINERARY'}
+              </RetroButton>
             </div>
           )}
-
-          <button 
-            type="submit" 
-            disabled={isGenerating || !startDate || !endDate || calculateDays() > 7 || (generateMode === 'manual' && manualDestinations.length === 0)} 
-            className="w-full py-5 rounded-full bg-slate-900 text-white dark:bg-white dark:text-black font-mono text-xs font-bold uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
-          >
-            {isGenerating ? 'MEMPROSES...' : 'EKSEKUSI PENYUSUNAN'}
-          </button>
         </form>
-      </div>
+      </GlassCard>
 
       <div className="lg:col-span-7">
         {!generatedResult && !isGenerating && (
-          <div className="h-full min-h-[500px] border border-dashed border-slate-300 dark:border-white/10 rounded-[2.5rem] flex flex-col items-center justify-center p-12 text-center bg-white/20 dark:bg-black/20 backdrop-blur-sm">
-            <div className="w-16 h-16 mb-6 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
-              <span className="font-serif text-2xl text-slate-400">?</span>
-            </div>
-            <p className="font-serif text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">Area Pratinjau</p>
-            <p className="font-mono text-xs text-slate-500 uppercase tracking-widest leading-relaxed max-w-sm">Tentukan parameter di panel kiri dan tekan eksekusi untuk melihat kalkulasi rute.</p>
-          </div>
+          <GlassCard className="h-full min-h-100 flex flex-col items-center justify-center p-8 text-center border-dashed border-2 bg-transparent shadow-none border-slate-300 dark:border-slate-700">
+            <div className="w-16 h-16 mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl"> </div>
+            <p className="font-mono text-slate-500 text-sm">Pilih parameter & klik Generate untuk mulai</p>
+          </GlassCard>
         )}
 
         {isGenerating && (
-          <div className="h-full min-h-[500px] rounded-[2.5rem] flex flex-col items-center justify-center p-12 bg-white/60 dark:bg-[#111111]/60 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-xl">
-            <div className="w-12 h-12 border-4 border-slate-900 dark:border-white border-t-transparent rounded-full animate-spin mb-8" />
-            <p className="font-mono text-xs font-bold uppercase tracking-widest animate-pulse text-slate-600 dark:text-slate-400">Algoritma Bekerja...</p>
-          </div>
+          <GlassCard className="h-full min-h-100 flex flex-col items-center justify-center p-8">
+            <div className="w-12 h-12 border-4 border-green-200 dark:border-slate-700 border-t-green-600 dark:border-t-yellow-400 rounded-full animate-spin mb-4"></div>
+            <p className="font-mono text-sm font-bold uppercase animate-pulse text-green-600 dark:text-yellow-400">Menyusun rute optimal...</p>
+          </GlassCard>
         )}
 
         {generatedResult && !isGenerating && (
-          <div className="bg-white/60 dark:bg-[#111111]/60 p-8 md:p-10 rounded-[2.5rem] border border-white/40 dark:border-white/10 shadow-xl animate-in zoom-in-95 duration-500">
-            <div className="flex justify-between items-start mb-10">
-              <h3 className="font-serif text-3xl md:text-4xl font-bold leading-tight">Draft<br/>Perjalanan</h3>
-              <span className="bg-slate-900 text-white dark:bg-white dark:text-black px-4 py-2 rounded-full font-mono text-[10px] font-bold uppercase tracking-widest shadow-md">
-                BERHASIL
-              </span>
+          <GlassCard className="p-6 animate-in slide-in-from-right-8 duration-500">
+            <div className="flex justify-between items-start mb-6">
+              <h3 className="font-serif text-2xl font-bold text-slate-900 dark:text-white">Hasil Generate</h3>
+              <RetroBadge status="success">SUKSES</RetroBadge>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4 mb-10">
-              <div className="p-6 bg-white/50 dark:bg-black/20 rounded-3xl border border-slate-200/50 dark:border-white/10">
-                <p className="text-[10px] font-mono tracking-widest text-slate-500 uppercase mb-2">Total Durasi</p>
-                <p className="font-serif text-3xl font-bold">{generatedResult.summary.total_days} Hari</p>
+
+            <div className="grid grid-cols-3 gap-4 mb-6 font-mono text-sm">
+              <div className="p-3 bg-white/50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-700">
+                <p className="text-[10px] text-slate-500 uppercase">Hari</p>
+                <p className="font-bold text-lg text-slate-900 dark:text-white">{generatedResult.summary.total_days}</p>
               </div>
-              <div className="p-6 bg-white/50 dark:bg-black/20 rounded-3xl border border-slate-200/50 dark:border-white/10">
-                <p className="text-[10px] font-mono tracking-widest text-slate-500 uppercase mb-2">Volume Destinasi</p>
-                <p className="font-serif text-3xl font-bold">{generatedResult.summary.total_destinations} Titik</p>
+              <div className="p-3 bg-white/50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-700">
+                <p className="text-[10px] text-slate-500 uppercase">Destinasi</p>
+                <p className="font-bold text-lg text-slate-900 dark:text-white">{generatedResult.summary.total_destinations}</p>
               </div>
-              <div className="p-6 bg-white/50 dark:bg-black/20 rounded-3xl border border-slate-200/50 dark:border-white/10 col-span-2">
-                <p className="text-[10px] font-mono tracking-widest text-slate-500 uppercase mb-2">Proyeksi Anggaran</p>
-                <p className="font-serif text-2xl md:text-3xl font-bold">{generatedResult.summary.estimated_total_budget}</p>
+              <div className="p-3 bg-green-50/50 dark:bg-yellow-900/10 rounded-xl col-span-3 border border-green-200 dark:border-yellow-900/30">
+                <p className="text-[10px] text-slate-500 uppercase">Estimasi Biaya</p>
+                <p className="font-bold text-lg text-green-700 dark:text-yellow-400">{generatedResult.summary.estimated_total_budget}</p>
               </div>
             </div>
 
-            <div className="mb-10">
-              <h4 className="font-mono text-xs font-bold uppercase tracking-widest mb-6 text-slate-500 border-b border-slate-200 dark:border-slate-800 pb-4">Cuplikan Destinasi Utama</h4>
-              <ul className="space-y-4">
+            <div className="mb-6">
+              <h4 className="font-mono text-xs font-bold uppercase mb-3 text-slate-700 dark:text-slate-300">Highlight Destinasi</h4>
+              <ul className="space-y-2">
                 {generatedResult.summary.highlights?.map((h, i) => (
-                  <li key={i} className="flex items-center gap-4">
-                    <span className="font-serif text-xl font-bold text-slate-300 dark:text-slate-700 italic">{String(i+1).padStart(2, '0')}</span>
-                    <span className="font-bold text-sm md:text-base">{h}</span>
+                  <li key={i} className="flex items-center gap-3 p-3 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                    <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-yellow-900/30 text-green-700 dark:text-yellow-400 flex items-center justify-center text-[10px] font-bold font-mono">
+                      {i + 1}
+                    </span>
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-200">{h}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="pt-8 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-4">
-              <input 
-                type="text" 
-                value={formTitle} 
-                onChange={(e) => setFormTitle(e.target.value)} 
-                className="flex-1 p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-black/20 focus:outline-none font-medium" 
-                placeholder="Beri nama untuk menyimpan..."
-              />
-              <button 
-                onClick={handleSaveItinerary} 
-                className="px-8 py-4 bg-slate-900 text-white dark:bg-white dark:text-black font-mono text-xs font-bold rounded-2xl uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl whitespace-nowrap"
-              >
-                SIMPAN ARSIP
-              </button>
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-6 mt-6">
+              <label className={labelStyle}>Nama untuk Disimpan</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  className={inputStyle}
+                />
+                <RetroButton onClick={handleSaveItinerary} className="whitespace-nowrap">
+                  SIMPAN
+                </RetroButton>
+              </div>
             </div>
-          </div>
+          </GlassCard>
         )}
       </div>
     </div>

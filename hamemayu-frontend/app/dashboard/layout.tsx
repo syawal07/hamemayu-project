@@ -163,16 +163,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </main>
 
-      <nav className="md:hidden fixed bottom-6 left-4 right-4 bg-white/75 dark:bg-slate-800/85 backdrop-blur-3xl border border-white/40 dark:border-slate-700/50 z-50 px-2 py-2 flex justify-between shadow-[0_16px_40px_-8px_rgba(0,0,0,0.2)] rounded-3xl">
+      <nav className="md:hidden fixed bottom-6 left-4 right-4 bg-white/75 dark:bg-slate-800/85 backdrop-blur-3xl border border-white/40 dark:border-slate-700/50 z-50 px-2 py-2 flex gap-2 overflow-x-auto snap-x snap-mandatory shadow-[0_16px_40px_-8px_rgba(0,0,0,0.2)] rounded-3xl [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {navItems.map((item) => {
           const isActive = pathname === item.path;
           return (
             <Link 
               key={item.name} 
               href={item.path}
-              className={`flex flex-col items-center justify-center w-full max-w-18 h-14 rounded-2xl transition-all duration-300 border ${
+              className={`flex flex-col items-center justify-center w-[72px] shrink-0 snap-center h-14 rounded-2xl transition-all duration-300 border ${
                 isActive 
-                  ? 'bg-green-700 dark:bg-yellow-400 text-white dark:text-slate-900 border-transparent shadow-md -translate-y-2' 
+                  ? 'bg-green-700 dark:bg-yellow-400 text-white dark:text-slate-900 border-transparent shadow-md -translate-y-1' 
                   : 'bg-transparent text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-white hover:bg-white/40 dark:hover:bg-slate-700/40'
               }`}
             >
