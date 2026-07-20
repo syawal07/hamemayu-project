@@ -118,14 +118,16 @@ PROMPT;
         if ($content) {
             return [
                 'label' => $content->title,
-                'url' => "http://maps.google.com/?q={$content->lat},{$content->lng}",
+                //'url' => "http://maps.google.com/?q={$content->lat},{$content->lng}",
+                'url' => "/dashboard/peta?lat={$content->lat}&lng={$content->lng}&title=" . urlencode($content->title),
                 'source' => 'database',
             ];
         }
         
         return [
             'label' => $placeName,
-            'url' => "http://maps.google.com/?q=" . urlencode($placeName . " Yogyakarta"),
+            //'url' => "http://maps.google.com/?q=" . urlencode($placeName . " Yogyakarta"),
+            'url' => "/dashboard/peta?search=" . urlencode($placeName . " Yogyakarta"),
             'source' => 'search',
         ];
     }
