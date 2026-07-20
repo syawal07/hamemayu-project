@@ -291,8 +291,16 @@ export default function MapComponent({ markers, center, focusSlug, routeDestinat
           <Marker position={userLoc} icon={userIcon}><Popup><div className="font-mono font-bold text-[9px] tracking-widest text-slate-800 text-center py-1">POSISI ANDA</div></Popup></Marker>
         )}
 
-        {isTargetNotInMarkers && autoTargetLoc && (
-          <Marker position={autoTargetLoc} icon={customIcon}><Popup><div className="font-mono font-bold text-[9px] tracking-widest text-slate-800 text-center py-1">TITIK DESTINASI</div></Popup></Marker>
+        {autoTargetLoc && (  //Cukup cek autoTargetLoc doang!
+          <Marker position={autoTargetLoc} icon={customIcon}>
+            <Popup>
+              <div className="font-mono font-bold text-[9px] tracking-widest text-slate-800 text-center py-1">
+                {searchParams.get('title') 
+                  ? decodeURIComponent(searchParams.get('title')!) 
+                  : 'Lokasi'}
+              </div>
+            </Popup>
+          </Marker>
         )}
 
         {routeCoordinates.length > 0 && (
