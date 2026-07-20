@@ -97,7 +97,7 @@ export default function PetaPage() {
       <div className="absolute top-4 left-4 md:top-6 md:left-6 z-1000 pointer-events-none">
         <div className="bg-white/75 dark:bg-slate-900/75 backdrop-blur-xl border border-white/50 dark:border-slate-700/50 p-3 md:p-4 rounded-2xl shadow-lg pointer-events-auto inline-flex flex-col">
           <h1 className="text-xl md:text-3xl font-serif font-bold text-slate-900 dark:text-white mb-0.5 md:mb-1 leading-none tracking-tight">
-            Peta Global
+            Peta Yogyakarta
           </h1>
           <p className="font-mono text-slate-600 dark:text-slate-400 text-[8px] md:text-[9px] tracking-[0.2em] uppercase font-bold">
             Pantau & Navigasi
