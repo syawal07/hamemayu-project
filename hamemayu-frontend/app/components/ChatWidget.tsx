@@ -158,7 +158,7 @@ export default function ChatWidget() {
 
   return (
     <div 
-      className="fixed bottom-28 md:bottom-8 right-4 md:right-8 z-[60] flex flex-col items-end pointer-events-none"
+      className="fixed bottom-[170px] md:bottom-[96px] right-4 md:right-8 z-[60] flex flex-col items-end pointer-events-none"
       style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
     >
       

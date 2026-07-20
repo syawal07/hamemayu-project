@@ -1,31 +1,54 @@
 @import "tailwindcss";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --color-jogja-green: #166534;
   --color-jogja-gold: #FACC15;
   --color-jogja-red: #DC2626;
-  /* Mengubah warna gelap menjadi lebih elegan ala Vercel/Linear */
-  --color-brutal-dark: #0a0a0c; 
-  
+  --color-brutal-dark: #0a0a0c;
+
   --font-sans: var(--font-montserrat), sans-serif;
   --font-serif: var(--font-playfair), serif;
   --font-mono: var(--font-space-mono), monospace;
 }
 
 @layer base {
+  html.a11y-text-large {
+    font-size: 110%;
+  }
+  
+  html.a11y-text-xlarge {
+    font-size: 120%;
+  }
+
   body {
     @apply bg-slate-50 text-slate-900 transition-colors duration-500;
-    /* Retro Web Theme: Subtle Dot Matrix Grid */
     background-image: radial-gradient(rgba(15, 28, 53, 0.08) 1px, transparent 1px);
     background-size: 20px 20px;
   }
-
+  
   .dark body {
     @apply bg-brutal-dark text-slate-50;
-    /* Dot matrix yang lebih soft untuk dark mode */
     background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
     background-size: 20px 20px;
+  }
+
+  body.a11y-reduce-motion *,
+  body.a11y-reduce-motion *::before,
+  body.a11y-reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  body.a11y-high-contrast {
+    @apply contrast-125 saturate-150;
+  }
+
+  body.a11y-grayscale {
+    @apply grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -34,32 +57,22 @@
 }
 
 @layer utilities {
-  /* =========================================
-     APPLE LIQUID GLASS UI CORE UTILITIES
-     ========================================= */
-  
   .glass-panel {
     @apply bg-white/50 dark:bg-[#15161a]/50 backdrop-blur-2xl border border-white/80 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.2)] transition-all duration-300;
   }
-
+  
   .glass-nav {
     @apply bg-white/60 dark:bg-[#0a0a0c]/60 backdrop-blur-3xl border-b border-white/80 dark:border-white/10 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.05)] transition-all duration-300;
   }
-
+  
   .glass-btn {
     @apply bg-white/40 dark:bg-white/5 backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-sm hover:bg-white/60 dark:hover:bg-white/10 hover:shadow-md transition-all duration-300;
   }
-
-  /* =========================================
-     VERCEL / LINEAR INSPIRED UTILITIES
-     ========================================= */
-
-  /* Border setipis 1px yang sangat rapi untuk komponen */
+  
   .crisp-border {
     @apply border border-slate-200/60 dark:border-slate-800/80;
   }
-
-  /* Efek pendaran cahaya (Glow) di belakang card saat hover */
+  
   .glow-effect {
     @apply relative z-0;
   }
